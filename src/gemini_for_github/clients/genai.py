@@ -1,14 +1,34 @@
 from typing import Any
 
-from google.genai import types
 from google.genai.client import AsyncClient, Client
-from google.genai.types import ContentListUnion, ContentListUnionDict, HarmBlockThreshold, HarmCategory, SafetySetting, ToolListUnion
+from google.genai.types import (
+    Content,
+    FunctionCallingConfig,
+    FunctionCallingConfigMode,
+    GenerateContentConfig,
+    GenerateContentResponse,
+    HarmBlockThreshold,
+    HarmCategory,
+    SafetySetting,
+    ToolConfig,
+    ToolListUnion,
+    ContentListUnion,
+    ContentListUnionDict,
+)
+
+from gemini_for_github.shared.logging import BASE_LOGGER
+
+logger = BASE_LOGGER.getChild("genai")
 
 
 class GenAIClient:
     """Concrete implementation of AI model client using Google's Generative AI."""
 
-    def __init__(self, api_key: str, model: str = "gemini-2.5-flash", temperature: float = 0.7, top_p: float = 0.8, top_k: int = 40):
+    request_counter: int = 0
+
+    def __init__(
+        self, api_key: str, model: str = "gemini-2.5-flash-preview-04-17", temperature: float = 0.7, top_p: float = 0.8, top_k: int = 40
+    ):
         """Initialize the GenAI client.
 
         Args:
@@ -26,15 +46,20 @@ class GenAIClient:
         self.top_p = top_p
         self.top_k = top_k
 
+    def _debug(self, msg: str):
+        logger.debug(f"Request {self.request_counter}: {msg}")
+
     async def generate_content(
         self,
-        contents: ContentListUnion | ContentListUnionDict,
-        tools: ToolListUnion | None = None,
+        system_prompt: str,
+        user_prompts: ContentListUnion | ContentListUnionDict,
+        tools: ToolListUnion,
     ) -> dict[str, Any]:
         """Generate content using the AI model.
 
         Args:
-            contents: List of content parts to process
+            system_prompt: System prompt
+            user_prompt: User prompt
             tools: Optional list of Tool objects available to the model
 
         Returns:
@@ -60,20 +85,49 @@ class GenAIClient:
             ),
         ]
 
-        generation_config = types.GenerateContentConfig(
+        self.request_counter += 1
+
+        generation_config = GenerateContentConfig(
             temperature=self.temperature,
             top_p=self.top_p,
             top_k=self.top_k,
-            max_output_tokens=2048,
+            max_output_tokens=4096,
             safety_settings=safety_settings,
             tools=tools,
+            system_instruction=system_prompt,
+            tool_config=ToolConfig(
+                function_calling_config=FunctionCallingConfig(
+                    mode=FunctionCallingConfigMode.ANY,
+                )
+            ),
         )
 
-        # Generate the response
-        response = await self.client.models.generate_content(
+        # self._debug(f"Generation config: {generation_config}")
+        self._debug(f"User prompts: {user_prompts}")
+
+        response: GenerateContentResponse = await self.client.models.generate_content(
             model=self.model,
-            contents=contents,
+            contents=user_prompts,
             config=generation_config,
         )
 
+        self._debug(f"Model response: {response.text}")
+
+        if response.automatic_function_calling_history and len(response.automatic_function_calling_history) > 0:
+            self._log_tool_calls(response.automatic_function_calling_history)
+
         return {"text": response.text, "tool_calls": response.prompt_feedback}
+
+    def _log_tool_calls(self, calling_history: list[Content]):
+        for tool_call in calling_history:
+            if not tool_call.parts:
+                continue
+
+            for part in tool_call.parts:
+                if not part.function_call:
+                    continue
+
+                self._debug(f"Function Call: {part.function_call.name}({part.function_call.args})")
+
+                if part.function_response:
+                    self._debug(f"Function Response: {part.function_response}")

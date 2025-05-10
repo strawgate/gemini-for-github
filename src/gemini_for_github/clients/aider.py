@@ -1,83 +1,55 @@
-import logging
+from collections.abc import Callable
+from pathlib import Path
 
-import git
 from aider.coders import Coder
+from aider.io import InputOutput
+from aider.models import Model
 
-logger = logging.getLogger(__name__)
+from gemini_for_github.errors.aider import AiderNoneResultError
+from gemini_for_github.shared.logging import BASE_LOGGER
+
+logger = BASE_LOGGER.getChild("aider")
 
 
-class AiderTool:
+class AiderClient:
     """
-    A tool to invoke Aider for code modifications.
+    A client to invoke Aider for code modifications.
     """
 
-    def __init__(self):
-        pass
+    def __init__(self, root: Path, model: str):
+        self.root = root
 
-    def run(self, instruction: str, files_to_include: list[str], model: str | None = None) -> dict:
+        io = InputOutput(yes=True)
+        self.model = Model(model)
+        self.coder = Coder(
+            main_model=self.model,
+            io=io,
+        )
+
+    def get_tools(self) -> dict[str, Callable]:
+        """Get the tools available to the Aider client."""
+        return {
+            "write_code": self.write_code,
+        }
+
+    def write_code(self, prompt: str) -> str:
         """
-        Executes Aider with the given instruction and files.
+        Executes Aider with the given prompt.
 
         Args:
-            instruction: The detailed prompt for Aider.
-            files_to_include: A list of file paths Aider should be aware of/edit.
+            prompt: The detailed prompt for Aider.
             model: Optional Aider model to use.
+            on_branch: Optional branch to checkout before invoking Aider.
 
         Returns:
-            A dictionary containing the results, including diff, new branch name, and commit SHA.
+            A string containing the results.
         """
-        logger.info(f"Invoking Aider with instruction: {instruction[:100]}...")
-        logger.info(f"Files to include: {files_to_include}")
-        logger.info(f"Model: {model}")
+        logger.info(f"Invoking Aider with prompt: {prompt[:100]}...")
 
-        try:
-            coder = Coder(
-                fnames=files_to_include,
-                model=model,
-            )
+        result = self.coder.run(with_message=prompt)
 
-            diffstat, response_text = coder.run(instruction)
+        if result is None:
+            msg = "Aider returned None"
+            raise AiderNoneResultError(msg)
 
-            new_branch_name = "aider-generated-branch"
-            commit_sha = "unknown"
-
-            if coder.repo:
-                try:
-                    current_branch = coder.repo.active_branch
-                    new_branch_name = current_branch.name
-                    latest_commit = coder.repo.head.commit
-                    commit_sha = latest_commit.hexsha
-                    logger.info(f"Aider committed changes to branch: {new_branch_name}, commit SHA: {commit_sha}")
-                except git.InvalidGitRepositoryError:
-                    logger.warning("Aider Coder was not initialized with a Git repository. Cannot determine branch/commit.")
-                except Exception as git_e:
-                    logger.error(f"Error inspecting Git repository after Aider run: {git_e}")
-            else:
-                logger.warning("Aider Coder has no associated Git repository. Cannot determine branch/commit.")
-
-            results = {
-                "success": True,
-                "diff": diffstat,
-                "response_text": response_text,
-                "new_branch_name": new_branch_name,
-                "commit_sha": commit_sha,
-                "error": None,
-            }
-            logger.info(f"Aider invocation successful. Branch: {new_branch_name}, Commit: {commit_sha}")
-
-        except Exception as e:
-            logger.error(f"Error during Aider invocation: {e}")
-            results = {"success": False, "diff": "", "response_text": "", "new_branch_name": "", "commit_sha": "", "error": str(e)}
-
-        return results
-
-
-if __name__ == "__main__":
-    aider_tool = AiderTool()
-
-    result = aider_tool.run(
-        instruction="Refactor the main function to improve readability.",
-        files_to_include=["src/gemini_for_github/main.py"],
-        model="gpt-4o",
-    )
-    print(result)
+        return result

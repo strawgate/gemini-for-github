@@ -1,500 +1,251 @@
+import asyncio
 import logging
+import sys
+from collections.abc import Callable
+from pathlib import Path
+from string import Template
 
-import click
+import asyncclick
+import yaml
+from pydantic import ValidationError
 
-from .actions.handler import ActionHandler
-from .clients.genai_client import GenAIClient
-from .clients.github_api_client import GitHubAPIClient
-from .config.prompt_manager import PromptManager
-from .mcp_integration.mcp_client_manager import MCPClientManager  # Import MCPClientManager
+from gemini_for_github.clients.aider import AiderClient
+from gemini_for_github.clients.filesystem import FilesystemClient
+from gemini_for_github.clients.genai import GenAIClient
+from gemini_for_github.clients.git import GitClient
+from gemini_for_github.clients.github import GitHubAPIClient
+from gemini_for_github.clients.mcp import MCPServer
+from gemini_for_github.config.config import Command, Config, ConfigFile
+from gemini_for_github.errors.aider import AiderError
+from gemini_for_github.errors.filesystem import FilesystemError
+from gemini_for_github.errors.main import CommandNotFoundError
+from gemini_for_github.errors.mcp import MCPServerError
+from gemini_for_github.shared.logging import BASE_LOGGER
 
-logger = logging.getLogger(__name__)
-
-
-def get_common_options():
-    """Common options for all commands."""
-    return [
-        click.option("--github-token", envvar="GITHUB_TOKEN", required=True, help="GitHub API token"),
-        click.option("--github-owner", envvar="GITHUB_OWNER", required=True, help="GitHub repository owner"),
-        click.option("--github-repo", envvar="GITHUB_REPO", required=True, help="GitHub repository name"),
-        click.option("--gemini-api-key", envvar="GEMINI_API_KEY", required=True, help="Gemini API key"),
-        click.option("--model", envvar="GEMINI_MODEL", default="gemini-1.5-flash", help="Gemini model to use"),
-        click.option("--temperature", envvar="GEMINI_TEMPERATURE", type=float, default=0.7, help="Model temperature"),
-        click.option("--top-p", envvar="GEMINI_TOP_P", type=float, default=0.8, help="Model top_p"),
-        click.option("--top-k", envvar="GEMINI_TOP_K", type=int, default=40, help="Model top_k"),
-        click.option("--activation-keywords", type=str, help="Comma-separated list of activation keywords (e.g., gemini,bill2.0)"),
-    ]
+logger = BASE_LOGGER.getChild("main")
 
 
-def create_command_handler(
-    custom_prompts: str | None = None,
-    mcp_config: str = "src/gemini_for_github/mcp_integration/mcp_servers.yaml",
-    activation_keywords: str | None = None,
-    **kwargs,
-) -> ActionHandler:
-    """Create a command handler with the given configuration."""
-    github_api = GitHubAPIClient(token=kwargs["github_token"], owner=kwargs["github_owner"], repo=kwargs["github_repo"])
-    ai_model = GenAIClient(
-        api_key=kwargs["gemini_api_key"],
-        model=kwargs["model"],
-        temperature=kwargs["temperature"],
-        top_p=kwargs["top_p"],
-        top_k=kwargs["top_k"],
-    )
-
-    activation_keywords_list = [kw.strip() for kw in activation_keywords.split(",")] if activation_keywords else None
-    prompt_manager = PromptManager(custom_prompts_path=custom_prompts, cli_activation_keywords=activation_keywords_list)
-
-    # Instantiate and connect MCPClientManager
-    mcp_client_manager = MCPClientManager(config_path=mcp_config)  # Pass config path
-    mcp_client_manager.load_config()
-    mcp_client_manager.connect_to_servers()  # This will discover tools
-
-    return ActionHandler(ai_model, github_api, prompt_manager, mcp_client_manager)  # Pass the manager
+async def _load_config(config_file_path: str, tool_restrictions: str | None) -> tuple[Config, ConfigFile]:
+    """Loads and parses the application configuration."""
+    with Path(config_file_path).open() as f:
+        config_data = yaml.safe_load(f)
+    config_file = ConfigFile(**config_data)
+    config = Config.from_config_file(config_file, tool_restrictions=tool_restrictions.split(",") if tool_restrictions else None)
+    return config, config_file
 
 
-def get_command_selection_prompt(user_message: str, allowed_commands: list[str], available_tools: list[str]) -> str:
-    """Generate a prompt for the LLM to select the appropriate command with a confidence score."""
-    return f"""Given the following user message and available commands, select the single most appropriate command to handle the request.
-
-User message: {user_message}
-
-Available commands:
-{chr(10).join(f"- {cmd}" for cmd in allowed_commands)}
-
-Available tools:
-{chr(10).join(f"- {tool}" for tool in available_tools)}
-
-Please respond with a JSON object containing the selected command and a confidence score (0.0 to 1.0). The JSON object should have the following structure:
-{{
-  "command": "selected_command_name",
-  "confidence": 0.95
-}}
-Ensure your response contains ONLY the JSON object and nothing else.
-"""
+async def _initialize_github_client(github_token: str, github_owner: str, github_repo: str) -> tuple[GitHubAPIClient, dict[str, Callable]]:
+    github_client = GitHubAPIClient(token=github_token, owner=github_owner, repo=github_repo)
+    return github_client, github_client.get_tools()
 
 
-@click.group()
-def cli():
-    """Gemini for GitHub CLI."""
+async def _initialize_git_client(repo_path: Path) -> tuple[GitClient, dict[str, Callable]]:
+    git_client = GitClient(repo_path=str(repo_path))
+    return git_client, git_client.get_tools()
 
 
-@cli.command()
-@click.option("--pr-number", required=True, type=int, help="Pull request number")
-@click.option("--allowed-commands", required=True, help="Comma-separated list of allowed commands")
-@click.option("--allowed-tools", help="Comma-separated list of allowed tools (defaults to all available tools)")
-@click.option("--custom-prompts", type=str, help="Path to custom prompts YAML file")
-@click.option(
-    "--mcp-config",
-    type=str,
-    default="src/gemini_for_github/mcp_integration/mcp_servers.yaml",
-    help="Path to MCP servers configuration YAML file",
-)
-@click.option("--activation-keywords", type=str, help="Comma-separated list of activation keywords (overrides YAML)")  # Added
-def pr_command(
-    pr_number: int,
-    allowed_commands: str,
-    allowed_tools: str | None,
-    custom_prompts: str | None,
-    mcp_config: str,
-    activation_keywords: str | None,
-    **kwargs,
-):
-    """Execute a command on a pull request."""
-    logger.info(f"Starting pr_command for PR #{pr_number}")
-    try:
-        handler = create_command_handler(
-            custom_prompts=custom_prompts,
-            mcp_config=mcp_config,
-            activation_keywords=activation_keywords,  # Pass to handler
-            **kwargs,
+async def _initialize_filesystem_client(root_path: Path) -> tuple[FilesystemClient, dict[str, Callable]]:
+    filesystem_client = FilesystemClient(root=root_path)
+    return filesystem_client, filesystem_client.get_tools()
+
+
+async def _initialize_genai_client(gemini_api_key: str, model: str) -> GenAIClient:
+    return GenAIClient(api_key=gemini_api_key, model=model)
+
+
+async def _initialize_aider_client(root_path: Path, model: str) -> tuple[AiderClient, dict[str, Callable]]:
+    aider_client = AiderClient(root=root_path, model=model)
+    return aider_client, aider_client.get_tools()
+
+
+async def _initialize_mcp_servers(config_file: ConfigFile) -> tuple[list[MCPServer], dict[str, Callable]]:
+    mcp_servers = []
+    tools = {}
+    for server_config in config_file.mcp_servers:
+        mcp_server = MCPServer(
+            server_config.name, server_config.command, server_config.args, env=server_config.env, disabled=server_config.disabled
         )
-        prompt_manager = handler.prompt_manager
+        if not server_config.disabled:
+            await mcp_server.start()
+            mcp_servers.append(mcp_server)
+            tools.update(await mcp_server.get_tools())
 
-        # Get PR description
-        try:
-            pr_text = handler.github_api.get_pr_description(pr_number)
-            logger.info(f"Successfully fetched description for PR #{pr_number}")
-        except Exception as e:
-            logger.error(f"Failed to fetch PR description for #{pr_number}: {e}", exc_info=True)
-            msg = f"Failed to fetch PR description for #{pr_number}: {e}"
-            raise click.ClickException(msg)
-
-        # Parse activation keyword and get user message
-        activation_keywords = prompt_manager.get_activation_keywords()
-        user_message = None
-        for keyword in activation_keywords:
-            if pr_text.lower().startswith(keyword.lower()):
-                user_message = pr_text[len(keyword) :].strip()
-                logger.info(f"Activation keyword found. User message: {user_message[:100]}...")  # Log first 100 chars
-                break
-
-        if not user_message:
-            logger.warning(f"No activation keyword found in PR text for #{pr_number}")
-            msg = "No activation keyword found in PR text"
-            raise click.ClickException(msg)
-
-        # Get all available tool names from PromptManager (which now uses MCPClientManager)
-        all_available_tool_names = prompt_manager.get_all_available_tool_names(handler.mcp_client_manager)
-        logger.debug(f"All available tools: {all_available_tool_names}")
-
-        # Filter available tools based on --allowed-tools CLI option
-        available_tools_for_prompt = all_available_tool_names
-        if allowed_tools:
-            allowed_tools_list = [tool.strip() for tool in allowed_tools.split(",")]
-            available_tools_for_prompt = [tool for tool in all_available_tool_names if tool in allowed_tools_list]
-            logger.info(f"Filtered available tools based on --allowed-tools: {available_tools_for_prompt}")
-
-        # Get allowed commands
-        allowed_commands_list = [cmd.strip() for cmd in allowed_commands.split(",")]
-        logger.debug(f"Allowed commands: {allowed_commands_list}")
-
-        # Use LLM to select the appropriate command with automatic function calling
-        selection_prompt = get_command_selection_prompt(
-            user_message,
-            allowed_commands_list,
-            available_tools_for_prompt,
-        )  # Use filtered list
-        logger.debug(f"Command selection prompt: {selection_prompt}")
-
-        try:
-            # The SDK handles the function call and returns the final text
-            # The ActionHandler now handles manual tool execution
-            logger.info("Requesting command selection from LLM...")
-            selection_response_text = handler.execute(  # Call handler.execute directly
-                action="select_command",  # Assuming a prompt key for command selection exists
-                user_message=user_message,
-                allowed_commands=allowed_commands_list,
-                available_tools=available_tools_for_prompt,  # Pass filtered list
-            ).strip()
-            logger.info(f"LLM command selection response: {selection_response_text}")
-
-            import json
-
-            selection_data = json.loads(selection_response_text)
-            selected_command = selection_data.get("command")
-            confidence = selection_data.get("confidence")
-
-            if confidence is not None and confidence < 0.8:  # Example threshold for low confidence
-                logger.warning(f"Low confidence score ({confidence}) for selected command: '{selected_command}'")
-                # TODO: Consider adding logic here for low confidence, e.g., asking for user confirmation or a fallback command.
-                # For now, we will proceed but log the warning.
-
-            logger.info(f"AI selected command: '{selected_command}' with confidence: {confidence}")
-
-        except json.JSONDecodeError:
-            logger.error(f"Failed to parse AI command selection response as JSON: {selection_response_text}", exc_info=True)
-            msg = f"Failed to parse AI command selection response as JSON: {selection_response_text}"
-            raise click.ClickException(msg)
-        except Exception as e:
-            logger.error(f"Error during AI command selection: {e}", exc_info=True)
-            msg = f"Error during AI command selection: {e}"
-            raise click.ClickException(msg)
-
-        if selected_command not in allowed_commands_list:
-            logger.error(f"Selected command '{selected_command}' is not in the allowed commands list: {allowed_commands_list}")
-            msg = f"Selected command '{selected_command}' is not in the allowed commands list"
-            raise click.ClickException(msg)
-
-        # Execute the selected command
-        logger.info(f"Executing selected command: '{selected_command}' for PR #{pr_number}")
-        try:
-            response = handler.execute(selected_command, pr_number=pr_number)
-            logger.info(f"Command '{selected_command}' completed successfully for PR #{pr_number}")
-            print(response)
-        except Exception as e:
-            logger.error(f"Error executing command '{selected_command}' for PR #{pr_number}: {e}", exc_info=True)
-            msg = f"Error executing command '{selected_command}' for PR #{pr_number}: {e}"
-            raise click.ClickException(msg)
-
-    except click.ClickException:
-        # Re-raise ClickExceptions as they are intended to be shown to the user
-        raise
-    except Exception as e:
-        # Catch other exceptions, log them, and raise a generic ClickException
-        logger.error(f"An unexpected error occurred while executing command for PR #{pr_number}: {e}", exc_info=True)
-        msg = f"An unexpected error occurred: {e}"
-        raise click.ClickException(msg)
+    return mcp_servers, tools
 
 
-@cli.command()
-@click.option("--issue-number", required=True, type=int, help="Issue number")
-@click.option("--allowed-commands", required=True, help="Comma-separated list of allowed commands")
-@click.option("--allowed-tools", help="Comma-separated list of allowed tools (defaults to all available tools)")
-@click.option("--custom-prompts", type=str, help="Path to custom prompts YAML file")
-@click.option(
-    "--mcp-config",
+async def _select_command(user_question: str, commands: list[Command], genai_client: GenAIClient) -> Command:
+    """Selects the most appropriate command based on the user's question."""
+    system_prompt = f"""
+    You are a GitHub based AI Agent. You receive plain text commands from the user and you need to determine which command, if any
+    should be executed to help the user.
+
+    Available Commands:
+    {"- " + chr(10).join([f"{cmd.name}: {cmd.description}" for cmd in commands])}
+
+    Respond with nothing other than the name (key) of the command that most closely matches the user's request.
+    """
+
+    user_prompt = f"""
+    User Request: **{user_question}**
+    """
+
+    logger.info("Calling GenAI for command selection...")
+
+    command_selection_response = await genai_client.generate_content(system_prompt, [user_prompt], tools=[])
+    selected_command_name = command_selection_response.get("text", "").strip()
+
+    logger.info(f"Model selected command: {selected_command_name}")
+
+    selected_command = next((cmd for cmd in commands if cmd.name == selected_command_name), None)
+
+    if not selected_command:
+        msg = f"Command '{selected_command_name}' not found"
+        raise CommandNotFoundError(msg)
+
+    return selected_command
+
+
+async def _get_allowed_commands(config: Config, command_restrictions: str | None) -> list[Command]:
+    """Gets the allowed commands from the config and CLI arguments."""
+    allowed_commands = config.commands
+    if command_restrictions:
+        restricted_commands = command_restrictions.split(",")
+        allowed_commands = [cmd for cmd in allowed_commands if cmd.name in restricted_commands]
+
+    return allowed_commands
+
+
+async def _execute_command(system_prompt: str, user_prompts: list[str], genai_client: GenAIClient, tools: list[Callable]) -> None:
+    """Executes the selected command."""
+
+    logger.info("Calling Gemini for prompt execution")
+    final_response = await genai_client.generate_content(system_prompt, user_prompts, tools=tools) # type: ignore
+    logger.info("Gemini believes ithas completed the task.")
+
+
+@asyncclick.command()
+@asyncclick.option("--github-token", type=str, required=True, envvar="GITHUB_TOKEN", help="GitHub API token")
+@asyncclick.option("--github-owner", type=str, required=True, envvar="GITHUB_OWNER", help="GitHub repository owner")
+@asyncclick.option("--github-repo", type=str, required=True, envvar="GITHUB_REPO", help="GitHub repository name")
+@asyncclick.option("--gemini-api-key", type=str, required=True, envvar="GEMINI_API_KEY", help="Gemini API key")
+@asyncclick.option("--github-issue-number", type=int, envvar="GITHUB_ISSUE_NUMBER", default=None, help="GitHub issue number")
+@asyncclick.option("--github-pr-number", type=int, envvar="GITHUB_PR_NUMBER", default=None, help="GitHub pull request number")
+@asyncclick.option("--model", type=str, default="gemini-2.5-flash-preview-04-17", envvar="GEMINI_MODEL", help="Gemini model to use")
+@asyncclick.option(
+    "--activation-restrictions",
     type=str,
-    default="src/gemini_for_github/mcp_integration/mcp_servers.yaml",
-    help="Path to MCP servers configuration YAML file",
+    default=None,
+    envvar="ACTIVATION_RESTRICTIONS",
+    help="Comma-separated activation restrictions (e.g., gemini,bill2.0)",
 )
-@click.option("--activation-keywords", type=str, help="Comma-separated list of activation keywords (overrides YAML)")  # Added
-def issue_command(
-    issue_number: int,
-    allowed_commands: str,
-    allowed_tools: str | None,
-    custom_prompts: str | None,
-    mcp_config: str,
-    activation_keywords: str | None,
-    **kwargs,
-):
-    """Execute a command on an issue."""
-    logger.info(f"Starting issue_command for issue #{issue_number}")
-    try:
-        handler = create_command_handler(
-            custom_prompts=custom_prompts,
-            mcp_config=mcp_config,
-            activation_keywords=activation_keywords,  # Pass to handler
-            **kwargs,
-        )
-        prompt_manager = handler.prompt_manager
-
-        # Get issue description
-        try:
-            issue_text = handler.github_api.get_issue_description(issue_number)
-            logger.info(f"Successfully fetched description for issue #{issue_number}")
-        except Exception as e:
-            logger.error(f"Failed to fetch issue description for #{issue_number}: {e}", exc_info=True)
-            msg = f"Failed to fetch issue description for #{issue_number}: {e}"
-            raise click.ClickException(msg)
-
-        # Parse activation keyword and get user message
-        activation_keywords = prompt_manager.get_activation_keywords()
-        user_message = None
-        for keyword in activation_keywords:
-            if issue_text.lower().startswith(keyword.lower()):
-                user_message = issue_text[len(keyword) :].strip()
-                logger.info(f"Activation keyword found. User message: {user_message[:100]}...")  # Log first 100 chars
-                break
-
-        if not user_message:
-            logger.warning(f"No activation keyword found in issue text for #{issue_number}")
-            msg = "No activation keyword found in issue text"
-            raise click.ClickException(msg)
-
-        # Get all available tool names from PromptManager
-        all_available_tool_names = prompt_manager.get_all_available_tool_names(handler.mcp_client_manager)
-        logger.debug(f"All available tools: {all_available_tool_names}")
-
-        # Filter available tools based on --allowed-tools CLI option
-        available_tools_for_prompt = all_available_tool_names
-        if allowed_tools:
-            allowed_tools_list = [tool.strip() for tool in allowed_tools.split(",")]
-            available_tools_for_prompt = [tool for tool in all_available_tool_names if tool in allowed_tools_list]
-            logger.info(f"Filtered available tools based on --allowed-tools: {available_tools_for_prompt}")
-
-        # Get allowed commands
-        allowed_commands_list = [cmd.strip() for cmd in allowed_commands.split(",")]
-        logger.debug(f"Allowed commands: {allowed_commands_list}")
-
-        # Use LLM to select the appropriate command with automatic function calling
-        selection_prompt = get_command_selection_prompt(
-            user_message,
-            allowed_commands_list,
-            available_tools_for_prompt,
-        )  # Use filtered list
-        logger.debug(f"Command selection prompt: {selection_prompt}")
-
-        try:
-            # The ActionHandler now handles manual tool execution
-            logger.info("Requesting command selection from LLM...")
-            selection_response_text = handler.execute(  # Call handler.execute directly
-                action="select_command",  # Assuming a prompt key for command selection exists
-                user_message=user_message,
-                allowed_commands=allowed_commands_list,
-                available_tools=available_tools_for_prompt,  # Pass filtered list
-            ).strip()
-            logger.info(f"LLM command selection response: {selection_response_text}")
-
-            import json
-
-            selection_data = json.loads(selection_response_text)
-            selected_command = selection_data.get("command")
-            confidence = selection_data.get("confidence")
-
-            if confidence is not None and confidence < 0.8:  # Example threshold for low confidence
-                logger.warning(f"Low confidence score ({confidence}) for selected command: '{selected_command}'")
-                # TODO: Consider adding logic here for low confidence, e.g., asking for user confirmation or a fallback command.
-                # For now, we will proceed but log the warning.
-
-            logger.info(f"AI selected command: '{selected_command}' with confidence: {confidence}")
-
-            if selected_command not in allowed_commands_list:
-                logger.error(f"Selected command '{selected_command}' is not in the allowed commands list: {allowed_commands_list}")
-                msg = f"Selected command '{selected_command}' is not in the allowed commands list"
-                raise click.ClickException(msg)
-
-            # Execute the selected command
-            logger.info(f"Executing selected command: '{selected_command}' for issue #{issue_number}")
-            try:
-                response = handler.execute(selected_command, issue_number=issue_number)
-                logger.info(f"Command '{selected_command}' completed successfully for issue #{issue_number}")
-                print(response)
-            except Exception as e:
-                logger.error(f"Error executing command '{selected_command}' for issue #{issue_number}: {e}", exc_info=True)
-                msg = f"Error executing command '{selected_command}' for issue #{issue_number}: {e}"
-                raise click.ClickException(msg)
-
-        except json.JSONDecodeError:
-            logger.error(f"Failed to parse AI command selection response as JSON: {selection_response_text}", exc_info=True)
-            msg = f"Failed to parse AI command selection response as JSON: {selection_response_text}"
-            raise click.ClickException(msg)
-        except Exception as e:
-            logger.error(f"Error during AI command selection or execution: {e}", exc_info=True)
-            msg = f"Error during AI command selection or execution: {e}"
-            raise click.ClickException(msg)
-
-    except click.ClickException:
-        # Re-raise ClickExceptions as they are intended to be shown to the user
-        raise
-    except Exception as e:
-        # Catch other exceptions, log them, and raise a generic ClickException
-        logger.error(f"An unexpected error occurred while executing command for issue #{issue_number}: {e}", exc_info=True)
-        msg = f"An unexpected error occurred: {e}"
-        raise click.ClickException(msg)
-
-
-@cli.command()
-@click.option("--path", required=True, type=str, help="Path to analyze")
-@click.option("--allowed-commands", required=True, help="Comma-separated list of allowed commands")
-@click.option("--allowed-tools", help="Comma-separated list of allowed tools (defaults to all available tools)")
-@click.option("--custom-prompts", type=str, help="Path to custom prompts YAML file")
-@click.option(
-    "--mcp-config",
-    type=str,
-    default="src/gemini_for_github/mcp_integration/mcp_servers.yaml",
-    help="Path to MCP servers configuration YAML file",
+@asyncclick.option("--config-file", type=str, default=None, envvar="CONFIG_FILE", help="Path to the config file")
+@asyncclick.option(
+    "--tool-restrictions", type=str, default=None, envvar="TOOL_RESTRICTIONS", help="Comma-separated list of tool restrictions"
 )
-@click.option("--activation-keywords", type=str, help="Comma-separated list of activation keywords (overrides YAML)")  # Added
-def analyze_code(
-    path: str,
-    allowed_commands: str,
-    allowed_tools: str | None,
-    custom_prompts: str | None,
-    mcp_config: str,
-    activation_keywords: str | None,
-    **kwargs,
+@asyncclick.option(
+    "--command-restrictions", type=str, default=None, envvar="COMMAND_RESTRICTIONS", help="Comma-separated list of command restrictions"
+)
+@asyncclick.option("--debug", is_flag=True, default=False, envvar="DEBUG", help="Enable debug mode")
+@asyncclick.option("--user-question", type=str, required=True, envvar="USER_QUESTION", help="The user's natural language question")
+async def cli(
+    github_token: str,
+    github_owner: str,
+    github_repo: str,
+    gemini_api_key: str,
+    github_issue_number: int | None,
+    github_pr_number: int | None,
+    model: str,
+    activation_restrictions: str | None,
+    config_file: str | None,
+    tool_restrictions: str | None,
+    command_restrictions: str | None,
+    debug: bool,
+    user_question: str,
 ):
-    """Analyze code in a directory."""
-    logger.info(f"Starting analyze_code for path: {path}")
     try:
-        handler = create_command_handler(
-            custom_prompts=custom_prompts,
-            mcp_config=mcp_config,
-            activation_keywords=activation_keywords,  # Pass to handler
-            **kwargs,
+        root_path = Path.cwd()
+
+        if debug:
+            BASE_LOGGER.setLevel(logging.DEBUG)
+
+        config_path = config_file if config_file else "./src/gemini_for_github/config/default.yaml"
+        config, _ = await _load_config(config_path, tool_restrictions)
+
+        allowed_commands = await _get_allowed_commands(config, command_restrictions)
+
+        tools = {}
+        github_client, github_tools = await _initialize_github_client(github_token, github_owner, github_repo)
+        tools.update(github_tools)
+
+        git_client, git_tools = await _initialize_git_client(root_path)
+        tools.update(git_tools)
+
+        filesystem_client, filesystem_tools = await _initialize_filesystem_client(root_path)
+        tools.update(filesystem_tools)
+
+        aider_client, aider_tools = await _initialize_aider_client(root_path, model)
+        tools.update(aider_tools)
+
+        #mcp_servers, mcp_tools = await _initialize_mcp_servers(config_file)
+        #tools.update(mcp_tools)
+
+        genai_client = await _initialize_genai_client(gemini_api_key, model)
+
+        # Filter commands based on activation keywords before selecting
+        if config.matches_activation_keyword(user_question, activation_restrictions):
+            command = await _select_command(user_question, allowed_commands, genai_client)
+        else:
+            logger.info("No activation keyword found in user question. Skipping command selection.")
+            sys.exit(0)
+
+        command_allowed_tools = command.allowed_tools
+
+        disallowed_tools: list[str] = []
+        allowed_tools: list[Callable] = []
+        allowed_tool_names: list[str] = []
+
+        for tool in tools:
+            if tool in command_allowed_tools:
+                allowed_tools.append(tools[tool])
+                allowed_tool_names.append(tool)
+            else:
+                disallowed_tools.append(tool)
+
+        context = {}
+        if github_issue_number:
+            context["github_issue_number"] = github_issue_number
+        if github_pr_number:
+            context["github_pr_number"] = github_pr_number
+        if user_question:
+            context["user_question"] = user_question
+
+        user_prompt = []
+
+        if command.example_flow:
+            user_prompt.append(f"\nExample Flow for resolving this request: {command.example_flow}")
+
+        template_string = Template(command.prompt)
+        user_prompt.append(template_string.substitute(context))
+
+        system_prompt = config.system_prompt
+        logger.info(
+            f"Answering user question: {user_question}, allowing tools: {allowed_tool_names}, disallowing tools: {disallowed_tools}"
         )
-        prompt_manager = handler.prompt_manager
 
-        # Get code content
-        try:
-            code_text = handler.github_api.get_file_content(path)
-            logger.info(f"Successfully fetched content for path: {path}")
-        except Exception as e:
-            logger.error(f"Failed to fetch file content for {path}: {e}", exc_info=True)
-            msg = f"Failed to fetch file content for {path}: {e}"
-            raise click.ClickException(msg)
+        response = await _execute_command(system_prompt, user_prompt, genai_client, allowed_tools)
 
-        # Parse activation keyword and get user message
-        activation_keywords = prompt_manager.get_activation_keywords()
-        user_message = None
-        for keyword in activation_keywords:
-            if code_text.lower().startswith(keyword.lower()):
-                user_message = code_text[len(keyword) :].strip()
-                logger.info(f"Activation keyword found. User message: {user_message[:100]}...")  # Log first 100 chars
-                break
+        logger.info(f"Response: {response}")
 
-        if not user_message:
-            logger.warning(f"No activation keyword found in code text for {path}")
-            msg = "No activation keyword found in code text"
-            raise click.ClickException(msg)
+    except (FileNotFoundError, yaml.YAMLError, ValidationError):
+        logger.exception("Configuration error")
+        sys.exit(1)
+    except (FilesystemError, AiderError, MCPServerError, CommandNotFoundError):
+        logger.exception("An application error occurred")
+        sys.exit(1)
+    except Exception:
+        logger.exception("An unexpected error occurred")
+        sys.exit(1)
 
-        # Get all available tool names from PromptManager
-        all_available_tool_names = prompt_manager.get_all_available_tool_names(handler.mcp_client_manager)
-        logger.debug(f"All available tools: {all_available_tool_names}")
-
-        # Filter available tools based on --allowed-tools CLI option
-        available_tools_for_prompt = all_available_tool_names
-        if allowed_tools:
-            allowed_tools_list = [tool.strip() for tool in allowed_tools.split(",")]
-            available_tools_for_prompt = [tool for tool in all_available_tool_names if tool in allowed_tools_list]
-            logger.info(f"Filtered available tools based on --allowed-tools: {available_tools_for_prompt}")
-
-        # Get allowed commands
-        allowed_commands_list = [cmd.strip() for cmd in allowed_commands.split(",")]
-        logger.debug(f"Allowed commands: {allowed_commands_list}")
-
-        # Use LLM to select the appropriate command with automatic function calling
-        selection_prompt = get_command_selection_prompt(
-            user_message,
-            allowed_commands_list,
-            available_tools_for_prompt,
-        )  # Use filtered list
-        logger.debug(f"Command selection prompt: {selection_prompt}")
-
-        try:
-            # The ActionHandler now handles manual tool execution
-            logger.info("Requesting command selection from LLM...")
-            selection_response_text = handler.execute(  # Call handler.execute directly
-                action="select_command",  # Assuming a prompt key for command selection exists
-                user_message=user_message,
-                allowed_commands=allowed_commands_list,
-                available_tools=available_tools_for_prompt,  # Pass filtered list
-            ).strip()
-            logger.info(f"LLM command selection response: {selection_response_text}")
-
-            import json
-
-            selection_data = json.loads(selection_response_text)
-            selected_command = selection_data.get("command")
-            confidence = selection_data.get("confidence")
-
-            if confidence is not None and confidence < 0.8:  # Example threshold for low confidence
-                logger.warning(f"Low confidence score ({confidence}) for selected command: '{selected_command}'")
-                # TODO: Consider adding logic here for low confidence, e.g., asking for user confirmation or a fallback command.
-                # For now, we will proceed but log the warning.
-
-            logger.info(f"AI selected command: '{selected_command}' with confidence: {confidence}")
-
-            if selected_command not in allowed_commands_list:
-                logger.error(f"Selected command '{selected_command}' is not in the allowed commands list: {allowed_commands_list}")
-                msg = f"Selected command '{selected_command}' is not in the allowed commands list"
-                raise click.ClickException(msg)
-
-            # Execute the selected command
-            logger.info(f"Executing selected command: '{selected_command}' for path: {path}")
-            try:
-                response = handler.execute(selected_command, path=path)
-                logger.info(f"Command '{selected_command}' completed successfully for path: {path}")
-                print(response)
-            except Exception as e:
-                logger.error(f"Error executing command '{selected_command}' for path: {path}: {e}", exc_info=True)
-                msg = f"Error executing command '{selected_command}' for path: {path}: {e}"
-                raise click.ClickException(msg)
-
-        except json.JSONDecodeError:
-            logger.error(f"Failed to parse AI command selection response as JSON: {selection_response_text}", exc_info=True)
-            msg = f"Failed to parse AI command selection response as JSON: {selection_response_text}"
-            raise click.ClickException(msg)
-        except Exception as e:
-            logger.error(f"Error during AI command selection or execution: {e}", exc_info=True)
-            msg = f"Error during AI command selection or execution: {e}"
-            raise click.ClickException(msg)
-
-    except click.ClickException:
-        # Re-raise ClickExceptions as they are intended to be shown to the user
-        raise
-    except Exception as e:
-        # Catch other exceptions, log them, and raise a generic ClickException
-        logger.error(f"An unexpected error occurred while analyzing code in {path}: {e}", exc_info=True)
-        msg = f"An unexpected error occurred: {e}"
-        raise click.ClickException(msg)
-
-
-# Apply common options to all commands
-for cmd in [pr_command, issue_command, analyze_code]:
-    for option in reversed(get_common_options()):
-        cmd = option(cmd)
 
 if __name__ == "__main__":
-    cli()
+    asyncio.run(cli())

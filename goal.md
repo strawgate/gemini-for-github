@@ -217,3 +217,23 @@ The code is currently in the early stages of development. The code is not yet re
 
 Read every file in the repo with the Filesystem Operations tool and suggest a plan to get the code aligned with our direction.
 
+
+
+## Command Line Arguments
+
+required
+click.option("--github-token", envvar="GITHUB_TOKEN", required=True, help="GitHub API token"),
+click.option("--github-owner", envvar="GITHUB_OWNER", required=True, help="GitHub repository owner"),
+click.option("--github-repo", envvar="GITHUB_REPO", required=True, help="GitHub repository name"),
+click.option("--gemini-api-key", envvar="GEMINI_API_KEY", required=True, help="Gemini API key"),
+
+optional
+click.option("--github-issue-number", type=int, help="GitHub issue number"),
+click.option("--github-pr-number", type=int, help="GitHub pull request number"),
+
+click.option("--model", envvar="GEMINI_MODEL", default="gemini-2.5-flash-preview-04-17", help="Gemini model to use"),
+click.option("--activation-keywords", type=str, help="Comma-separated activation keywords (e.g., gemini,bill2.0)"),
+click.option("--config-file", type=str, help="Path to the config file"),
+click.option("--tool-restrictions", type=str, help="Comma-separated list of tool restrictions"),
+click.option("--command-restrictions", type=str, help="Comma-separated list of command restrictions"),
+click.option("--debug", is_flag=True, help="Enable debug mode"),

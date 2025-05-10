@@ -1,0 +1,251 @@
+import asyncio
+import logging
+import sys
+from collections.abc import Callable
+from pathlib import Path
+from string import Template
+
+import asyncclick
+import yaml
+from pydantic import ValidationError
+
+from gemini_for_github.clients.aider import AiderClient
+from gemini_for_github.clients.filesystem import FilesystemClient
+from gemini_for_github.clients.genai import GenAIClient
+from gemini_for_github.clients.git import GitClient
+from gemini_for_github.clients.github import GitHubAPIClient
+from gemini_for_github.clients.mcp import MCPServer
+from gemini_for_github.config.config import Command, Config, ConfigFile
+from gemini_for_github.errors.aider import AiderError
+from gemini_for_github.errors.filesystem import FilesystemError
+from gemini_for_github.errors.main import CommandNotFoundError
+from gemini_for_github.errors.mcp import MCPServerError
+from gemini_for_github.shared.logging import BASE_LOGGER
+
+logger = BASE_LOGGER.getChild("main")
+
+
+async def _load_config(config_file_path: str, tool_restrictions: str | None) -> tuple[Config, ConfigFile]:
+    """Loads and parses the application configuration."""
+    with Path(config_file_path).open() as f:
+        config_data = yaml.safe_load(f)
+    config_file = ConfigFile(**config_data)
+    config = Config.from_config_file(config_file, tool_restrictions=tool_restrictions.split(",") if tool_restrictions else None)
+    return config, config_file
+
+
+async def _initialize_github_client(github_token: str, github_owner: str, github_repo: str) -> tuple[GitHubAPIClient, dict[str, Callable]]:
+    github_client = GitHubAPIClient(token=github_token, owner=github_owner, repo=github_repo)
+    return github_client, github_client.get_tools()
+
+
+async def _initialize_git_client(repo_path: Path) -> tuple[GitClient, dict[str, Callable]]:
+    git_client = GitClient(repo_path=str(repo_path))
+    return git_client, git_client.get_tools()
+
+
+async def _initialize_filesystem_client(root_path: Path) -> tuple[FilesystemClient, dict[str, Callable]]:
+    filesystem_client = FilesystemClient(root=root_path)
+    return filesystem_client, filesystem_client.get_tools()
+
+
+async def _initialize_genai_client(gemini_api_key: str, model: str) -> GenAIClient:
+    return GenAIClient(api_key=gemini_api_key, model=model)
+
+
+async def _initialize_aider_client(root_path: Path, model: str) -> tuple[AiderClient, dict[str, Callable]]:
+    aider_client = AiderClient(root=root_path, model=model)
+    return aider_client, aider_client.get_tools()
+
+
+async def _initialize_mcp_servers(config_file: ConfigFile) -> tuple[list[MCPServer], dict[str, Callable]]:
+    mcp_servers = []
+    tools = {}
+    for server_config in config_file.mcp_servers:
+        mcp_server = MCPServer(
+            server_config.name, server_config.command, server_config.args, env=server_config.env, disabled=server_config.disabled
+        )
+        if not server_config.disabled:
+            await mcp_server.start()
+            mcp_servers.append(mcp_server)
+            tools.update(await mcp_server.get_tools())
+
+    return mcp_servers, tools
+
+
+async def _select_command(user_question: str, commands: list[Command], genai_client: GenAIClient) -> Command:
+    """Selects the most appropriate command based on the user's question."""
+    system_prompt = f"""
+    You are a GitHub based AI Agent. You receive plain text commands from the user and you need to determine which command, if any
+    should be executed to help the user.
+
+    Available Commands:
+    {"- " + chr(10).join([f"{cmd.name}: {cmd.description}" for cmd in commands])}
+
+    Respond with nothing other than the name (key) of the command that most closely matches the user's request.
+    """
+
+    user_prompt = f"""
+    User Request: **{user_question}**
+    """
+
+    logger.info("Calling GenAI for command selection...")
+
+    command_selection_response = await genai_client.generate_content(system_prompt, [user_prompt], tools=[])
+    selected_command_name = command_selection_response.get("text", "").strip()
+
+    logger.info(f"Model selected command: {selected_command_name}")
+
+    selected_command = next((cmd for cmd in commands if cmd.name == selected_command_name), None)
+
+    if not selected_command:
+        msg = f"Command '{selected_command_name}' not found"
+        raise CommandNotFoundError(msg)
+
+    return selected_command
+
+
+async def _get_allowed_commands(config: Config, command_restrictions: str | None) -> list[Command]:
+    """Gets the allowed commands from the config and CLI arguments."""
+    allowed_commands = config.commands
+    if command_restrictions:
+        restricted_commands = command_restrictions.split(",")
+        allowed_commands = [cmd for cmd in allowed_commands if cmd.name in restricted_commands]
+
+    return allowed_commands
+
+
+async def _execute_command(system_prompt: str, user_prompts: list[str], genai_client: GenAIClient, tools: list[Callable]) -> None:
+    """Executes the selected command."""
+
+    logger.info("Calling Gemini for prompt execution")
+    final_response = await genai_client.generate_content(system_prompt, user_prompts, tools=tools) # type: ignore
+    logger.info("Gemini believes ithas completed the task.")
+
+
+@asyncclick.command()
+@asyncclick.option("--github-token", type=str, required=True, envvar="GITHUB_TOKEN", help="GitHub API token")
+@asyncclick.option("--github-owner", type=str, required=True, envvar="GITHUB_OWNER", help="GitHub repository owner")
+@asyncclick.option("--github-repo", type=str, required=True, envvar="GITHUB_REPO", help="GitHub repository name")
+@asyncclick.option("--gemini-api-key", type=str, required=True, envvar="GEMINI_API_KEY", help="Gemini API key")
+@asyncclick.option("--github-issue-number", type=int, envvar="GITHUB_ISSUE_NUMBER", default=None, help="GitHub issue number")
+@asyncclick.option("--github-pr-number", type=int, envvar="GITHUB_PR_NUMBER", default=None, help="GitHub pull request number")
+@asyncclick.option("--model", type=str, default="gemini-2.5-flash-preview-04-17", envvar="GEMINI_MODEL", help="Gemini model to use")
+@asyncclick.option(
+    "--activation-restrictions",
+    type=str,
+    default=None,
+    envvar="ACTIVATION_RESTRICTIONS",
+    help="Comma-separated activation restrictions (e.g., gemini,bill2.0)",
+)
+@asyncclick.option("--config-file", type=str, default=None, envvar="CONFIG_FILE", help="Path to the config file")
+@asyncclick.option(
+    "--tool-restrictions", type=str, default=None, envvar="TOOL_RESTRICTIONS", help="Comma-separated list of tool restrictions"
+)
+@asyncclick.option(
+    "--command-restrictions", type=str, default=None, envvar="COMMAND_RESTRICTIONS", help="Comma-separated list of command restrictions"
+)
+@asyncclick.option("--debug", is_flag=True, default=False, envvar="DEBUG", help="Enable debug mode")
+@asyncclick.option("--user-question", type=str, required=True, envvar="USER_QUESTION", help="The user's natural language question")
+async def cli(
+    github_token: str,
+    github_owner: str,
+    github_repo: str,
+    gemini_api_key: str,
+    github_issue_number: int | None,
+    github_pr_number: int | None,
+    model: str,
+    activation_restrictions: str | None,
+    config_file: str | None,
+    tool_restrictions: str | None,
+    command_restrictions: str | None,
+    debug: bool,
+    user_question: str,
+):
+    try:
+        root_path = Path.cwd()
+
+        if debug:
+            BASE_LOGGER.setLevel(logging.DEBUG)
+
+        config_path = config_file if config_file else "./src/gemini_for_github/config/default.yaml"
+        config, _ = await _load_config(config_path, tool_restrictions)
+
+        allowed_commands = await _get_allowed_commands(config, command_restrictions)
+
+        tools = {}
+        github_client, github_tools = await _initialize_github_client(github_token, github_owner, github_repo)
+        tools.update(github_tools)
+
+        git_client, git_tools = await _initialize_git_client(root_path)
+        tools.update(git_tools)
+
+        filesystem_client, filesystem_tools = await _initialize_filesystem_client(root_path)
+        tools.update(filesystem_tools)
+
+        aider_client, aider_tools = await _initialize_aider_client(root_path, model)
+        tools.update(aider_tools)
+
+        #mcp_servers, mcp_tools = await _initialize_mcp_servers(config_file)
+        #tools.update(mcp_tools)
+
+        genai_client = await _initialize_genai_client(gemini_api_key, model)
+
+        # Filter commands based on activation keywords before selecting
+        if config.matches_activation_keyword(user_question, activation_restrictions):
+            command = await _select_command(user_question, allowed_commands, genai_client)
+        else:
+            logger.info("No activation keyword found in user question. Skipping command selection.")
+            sys.exit(0)
+
+        command_allowed_tools = command.allowed_tools
+
+        disallowed_tools: list[str] = []
+        allowed_tools: list[Callable] = []
+        allowed_tool_names: list[str] = []
+
+        for tool in tools:
+            if tool in command_allowed_tools:
+                allowed_tools.append(tools[tool])
+                allowed_tool_names.append(tool)
+            else:
+                disallowed_tools.append(tool)
+
+        context = {}
+        if github_issue_number:
+            context["github_issue_number"] = github_issue_number
+        if github_pr_number:
+            context["github_pr_number"] = github_pr_number
+        if user_question:
+            context["user_question"] = user_question
+
+        user_prompt = []
+
+        if command.example_flow:
+            user_prompt.append(f"\nExample Flow for resolving this request: {command.example_flow}")
+
+        template_string = Template(command.prompt)
+        user_prompt.append(template_string.substitute(context))
+
+        system_prompt = config.system_prompt
+        logger.info(
+            f"Answering user question: {user_question}, allowing tools: {allowed_tool_names}, disallowing tools: {disallowed_tools}"
+        )
+
+        response = await _execute_command(system_prompt, user_prompt, genai_client, allowed_tools)
+
+        logger.info(f"Response: {response}")
+
+    except (FileNotFoundError, yaml.YAMLError, ValidationError):
+        logger.exception("Configuration error")
+        sys.exit(1)
+    except (FilesystemError, AiderError, MCPServerError, CommandNotFoundError):
+        logger.exception("An application error occurred")
+        sys.exit(1)
+    except Exception:
+        logger.exception("An unexpected error occurred")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    asyncio.run(cli())

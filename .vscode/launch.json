@@ -1,0 +1,48 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Propose a Solution for Issue 1",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/gemini_for_github/main.py",
+            "args": [
+                "--debug",
+                "--github-issue-number",
+                "1",
+                "--user-question",
+                "gemini propose a solution to the issue"
+           ],
+           "console": "integratedTerminal",
+           "envFile": "${workspaceFolder}/.env",
+           "justMyCode": true,
+       },
+       {
+           "name": "Make a PR for Issue 2",
+           "type": "debugpy",
+           "request": "launch",
+           "program": "${workspaceFolder}/src/gemini_for_github/main.py",
+           "args": [
+               "--debug",
+               "--github-issue-number",
+               "2",
+               "--user-question",
+               "gemini make a pull request for the issue"
+          ],
+          "console": "integratedTerminal",
+          "envFile": "${workspaceFolder}/.env",
+          "justMyCode": true,
+      },
+       {
+           "name": "Debug Current File",
+           "type": "debugpy",
+           "request": "launch",
+           "program": "${file}",
+           "console": "integratedTerminal",
+           "justMyCode": true,
+           "env": {
+               "PYTHONPATH": "${workspaceFolder}"
+           }
+       }
+   ]
+}

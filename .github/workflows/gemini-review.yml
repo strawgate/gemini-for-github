@@ -1,0 +1,41 @@
+name: Gemini Review
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # Fetch all history for diff
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x' # Use an appropriate Python version
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install poetry
+        poetry install
+
+    - name: Run Gemini Review
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_OWNER: ${{ github.repository_owner }}
+        GITHUB_REPO: ${{ github.event.repository.name }}
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      run: |
+        poetry run python src/gemini_for_github/main.py pr-command \
+          --pr-number ${{ github.event.pull_request.number }} \
+          --allowed-commands "review_pr" \ # Specify allowed commands
+          --allowed-tools "folder_read_all,file_read,list_code_definition_names,create_comment" \ # Specify allowed tools for review
+          --custom-prompts .github/gemini-review/prompts.yaml \ # Optional: Path to custom prompts
+          --mcp-config .github/gemini-review/mcp_servers.yaml \ # Optional: Path to custom MCP config
+          --activation-keywords "gemini,bot" # Add activation keywords

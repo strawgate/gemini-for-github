@@ -1,0 +1,162 @@
+# Default activation keywords
+# Note: Activation keywords can be restricted by the CLI and will overwrite any activation keywords here.
+activation_keywords:
+  - gemini
+  - strawgate2.0
+
+# Available tools that can be used by any command. 
+# Note: Available tools can be restricted by the CLI and will overwrite any tools allowed here.
+globally_allowed_tools:
+  # - Tool name
+  - git_diff
+  - read_file
+  - write_file
+  - commit_code
+  - search_code
+  - analyze_code
+  - get_pr_info
+  - get_issue_info
+
+# Command prompts
+# Note: Command prompts can be restricted by the CLI.
+
+commands:
+  # - name: "command_slug"
+  #   description: "Description of the command"
+  #   prompt: |
+  #     Please review the following code changes and provide feedback:
+  #     {diff}
+  #     Please provide a detailed code review that:
+  #     {diff}
+  #     Please provide a detailed code review that:
+  #   ...or...
+  #   prompt_file: "path/to/prompt.md"
+  #   allowed_tools:
+  #     - git_diff
+  #     - read_file
+  #     - write_file
+  #     - commit_code
+  #     - search_code
+  #     - analyze_code
+
+  - name: "review_pr"
+    description: "Review a pull request"
+    prompt: |
+      Please review the following code changes and provide feedback:
+
+      {diff}
+
+      Please provide a detailed code review that:
+      1. Identifies potential issues or bugs
+      2. Suggests improvements for code quality
+      3. Checks for security concerns
+      4. Verifies best practices are followed
+      5. Ensures the changes are well-documented
+
+      Format your response in markdown with clear sections.
+
+  - name: "suggest_next_steps_pr"
+    description : "Suggest next steps for a pull request"
+    prompt: |
+      Based on the following code changes:
+
+      {diff}
+
+      Please suggest next steps that would improve the code. Consider:
+      1. Additional tests that might be needed
+      2. Documentation updates
+      3. Performance optimizations
+      4. Edge cases to handle
+      5. Related areas that might need attention
+
+      Format your response in markdown with clear sections.
+
+  - name: "explain_changes_pr"
+    description: "Explain changes in a pull request"
+    prompt: |
+      Please explain the following code changes in a way that would be helpful for a code review:
+
+      {diff}
+
+      Your explanation should:
+      1. Summarize the main changes
+      2. Explain the purpose of each significant change
+      3. Highlight any complex logic or algorithms
+      4. Note any potential impacts on other parts of the system
+      5. Identify any assumptions or dependencies
+
+      Format your response in markdown with clear sections.
+
+  - name: "review_issue"
+    description: "Review an issue"
+    prompt: |
+      Please review the following issue:
+
+      {body}
+
+      Please provide a detailed review that:
+      1. Analyzes the problem description
+      2. Suggests potential solutions
+      3. Identifies any missing information
+      4. Considers impact and scope
+      5. Recommends next steps
+
+        Format your response in markdown with clear sections.
+
+  - name: "suggest_next_steps_issue"
+    description: "Suggest next steps for an issue"
+    prompt: |
+      Based on the following issue:
+
+      {body}
+
+      Please suggest next steps to address this issue. Consider:
+      1. Immediate actions that can be taken
+      2. Potential solutions or approaches
+      3. Required resources or dependencies
+      4. Potential challenges or blockers
+      5. Related issues or areas to investigate
+
+      Format your response in markdown with clear sections.
+
+  - name: "explain_issue"
+    description: "Explain an issue"
+    prompt: |
+      Based on the following issue:
+
+      {body}
+
+      Please explain what changes would be needed to address this issue. Your explanation should:
+      1. Break down the required changes into clear steps
+      2. Explain the technical approach
+      3. Identify any dependencies or prerequisites
+      4. Estimate the complexity and effort required
+      5. Suggest a testing strategy
+
+      Format your response in markdown with clear sections.
+
+  - name: "write_code_changes"
+    description: "Write code changes using Aider"
+    prompt: |
+      You are tasked with making code changes using the Aider tool.
+      Your goal is to generate a clear and concise instruction for Aider,
+      specify the files Aider should consider, and optionally provide a model name.
+
+      Use the `AiderTool` with the following parameters:
+      - `instruction`: A detailed description of the code changes required.
+      - `files_to_include`: A list of file paths that Aider should be aware of or modify.
+      - `model` (optional): The name of the Aider model to use (e.g., "gpt-4o", "gpt-3.5-turbo").
+
+      Example tool call:
+      ```json
+      {
+        "tool_code": "AiderTool",
+        "tool_args": {
+          "instruction": "Implement the feature described in the issue.",
+          "files_to_include": ["src/file1.py", "src/file2.py"],
+          "model": "gpt-4o"
+        }
+      }
+      ```
+
+      Based on the user's request and the context provided, formulate the appropriate `instruction` and `files_to_include` for the `AiderTool`. If a specific model is requested or appropriate, include the `model` parameter.

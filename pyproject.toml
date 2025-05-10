@@ -1,0 +1,79 @@
+[project]
+name = "gemini-for-github"
+version = "0.1.0"
+description = "AI-powered code review and analysis using Google's Gemini model"
+authors = [
+    {name = "William Easton", email = "bill.easton@elastic.co"}
+]
+readme = "README.md"
+requires-python = ">=3.12, <3.13"
+dependencies = [
+    "click >=8.1.8",
+    "loguru >=0.7.3",
+    "pygithub >=2.6.1",
+    "google-generativeai >=0.8.5",
+    "python-dotenv >=1.1.0",
+    "GitPython >=3.1.0",
+    "google-genai >=1.14.0",
+    "mcp >=1.8.0",
+]
+license = "Apache-2.0"
+classifiers = [
+]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+packages = [
+    { include = "gemini_for_github", from = "src" }
+]
+
+[tool.poetry.scripts]
+gemini-github = "gemini_for_github.main:cli"
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=8.3.5"
+pytest-mock = ">=3.14.0"
+ruff = ">=0.11.1"
+
+[tool.ruff]
+target-version = "py312"
+lint.fixable = ["ALL"]
+line-length = 140
+lint.ignore = [
+    "COM812"
+]
+lint.extend-select = [
+    "A",
+    "ARG",
+    "B",
+    "C4",
+    "COM",
+    "DTZ",
+    "E",
+    "EM",
+    "F",
+    "FURB",
+    "I",
+    "LOG",
+    "N",
+    "PERF",
+    "PIE",
+    "PLR",
+    "PLW",
+    "PT",
+    "PTH",
+    "Q",
+    "RET",
+    "RSE",
+    "RUF",
+    "S",
+    "SIM",
+    "TC",
+    "TID",
+    "TRY",
+    "UP",
+    "W",
+]

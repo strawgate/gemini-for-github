@@ -69,25 +69,22 @@ runs:
         python-version: '3.12'
 
     - name: Install Poetry
+      shell: bash
       run: |
         curl -sSL https://install.python-poetry.org | python3 -
 
     - name: Install dependencies
+      shell: bash
       run: |
         poetry install
 
     - name: Run Gemini Action
-      env:
-        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
-        GITHUB_ISSUE_NUMBER: ${{ github.event.issue.number }}
-        USER_QUESTION: ${{ github.event.comment.body }}
+      shell: bash
       run: |
         poetry run python -m src.gemini_for_github.main 
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
+      env:
+        github-token: ${{ inputs.GITHUB_TOKEN }}
+        gemini-api-key: ${{ inputs.GEMINI_API_KEY }}
         github-pr-number: ${{ github.event.pull_request.number }}
         github-issue-number: ${{ github.event.issue.number }}
         tool-restrictions: ${{ inputs.tool_restrictions }}

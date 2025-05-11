@@ -1,3 +1,5 @@
+"""Custom exceptions for Filesystem client operations."""
+
 class FilesystemError(Exception):
     """Base class for all filesystem errors."""
 

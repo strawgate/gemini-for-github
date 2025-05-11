@@ -13,10 +13,17 @@ logger = BASE_LOGGER.getChild("aider")
 
 class AiderClient:
     """
-    A client to invoke Aider for code modifications.
+    A client for interacting with the Aider tool, which facilitates AI-driven code modifications.
+    This client initializes and manages the Aider Coder instance.
     """
 
     def __init__(self, root: Path, model: str):
+        """Initializes the AiderClient.
+
+        Args:
+            root: The root directory for Aider's operations.
+            model: The specific Gemini model string to be used by Aider (e.g., "gemini/gemini-2.5-flash-preview-04-17").
+        """
         self.root = root
 
         io = InputOutput(yes=True)
@@ -38,11 +45,9 @@ class AiderClient:
 
         Args:
             prompt: The detailed prompt for Aider.
-            model: Optional Aider model to use.
-            on_branch: Optional branch to checkout before invoking Aider.
 
         Returns:
-            A string containing the results.
+            A string containing the results of the Aider execution.
         """
         logger.info(f"Invoking Aider with prompt: {prompt[:100]}...")
 

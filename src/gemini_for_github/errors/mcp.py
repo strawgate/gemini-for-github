@@ -1,3 +1,5 @@
+"""Custom exceptions for MCP server operations."""
+
 class MCPServerError(Exception):
     """Base class for MCP server errors."""
 

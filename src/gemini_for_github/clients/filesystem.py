@@ -28,9 +28,20 @@ class FileInfo(BaseModel):
 
 
 class FilesystemClient:
+    """
+    A client for interacting with the local filesystem.
+    It provides methods for retrieving file and directory information and content,
+    ensuring that all operations are scoped within a defined root directory.
+    """
     root: Path
 
     def __init__(self, root: Path):
+        """Initializes the FilesystemClient.
+
+        Args:
+            root: The root directory for all filesystem operations.
+                  Paths accessed via this client will be relative to this root.
+        """
         self.root = root
 
     def get_tools(self) -> dict[str, Callable]:
@@ -43,6 +54,15 @@ class FilesystemClient:
 
     @contextmanager
     def error_handler(self, path: str, msg: str):
+        """
+        A context manager for handling common filesystem errors.
+        It wraps filesystem operations and raises specific FilesystemError
+        subclasses for known issues, or a generic FilesystemError for unknown exceptions.
+
+        Args:
+            path: The path involved in the operation, used for logging.
+            msg: A descriptive message for the generic FilesystemError.
+        """
         try:
             yield Path(path)
         except FilesystemError as e:
@@ -52,7 +72,19 @@ class FilesystemClient:
             raise FilesystemError(msg) from e
 
     def _get_rendered_path(self, root_dir: Path, relative_path: Path) -> Path:
+        """
+        Resolves a relative path against a root directory and ensures it's within that root.
 
+        Args:
+            root_dir: The absolute root directory.
+            relative_path: The path relative to the root_dir.
+
+        Returns:
+            The resolved absolute path.
+
+        Raises:
+            FilesystemOutsideRootError: If the resolved path is outside the root_dir.
+        """
         rendered_path = Path(root_dir).joinpath(relative_path).resolve()
 
         if not rendered_path.relative_to(root_dir.resolve()):
@@ -62,6 +94,15 @@ class FilesystemClient:
         return rendered_path
 
     def get_file_info(self, relative_path: str) -> FileInfo:
+        """
+        Gets information about a file.
+
+        Args:
+            relative_path: The path to the file, relative to the client's root directory.
+
+        Returns:
+            A FileInfo object containing details about the file.
+        """
         logger.info(f"Getting file info for {relative_path}")
 
         with self.error_handler(relative_path, "Failed to get file info") as p:
@@ -83,6 +124,15 @@ class FilesystemClient:
         )
 
     def get_file_content(self, relative_path: str) -> str:
+        """
+        Gets the content of a file.
+
+        Args:
+            relative_path: The path to the file, relative to the client's root directory.
+
+        Returns:
+            The content of the file as a string.
+        """
         logger.info(f"Getting file content for {relative_path}")
         
         with self.error_handler(relative_path, "Failed to get file content") as p:
@@ -94,6 +144,15 @@ class FilesystemClient:
                 raise FilesystemReadError(msg) from e
 
     def get_files_content(self, relative_paths: list[str]) -> dict[str, str]:
+        """
+        Gets the content of multiple files.
+
+        Args:
+            relative_paths: A list of paths to the files, relative to the client's root directory.
+
+        Returns:
+            A dictionary where keys are relative paths and values are file contents.
+        """
         return {relative_path: self.get_file_content(relative_path) for relative_path in relative_paths}
 
     def get_directory_info(

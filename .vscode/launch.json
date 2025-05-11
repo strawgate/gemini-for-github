@@ -11,7 +11,7 @@
                 "--github-issue-number",
                 "1",
                 "--user-question",
-                "gemini propose a solution to the issue"
+                "/gemini make a pr to fix this please"
            ],
            "console": "integratedTerminal",
            "envFile": "${workspaceFolder}/.env",
@@ -25,11 +25,11 @@
            "args": [
                "--debug",
                "--github-issue-number",
-               "2",
+               "6",
                "--user-question",
-               "gemini make a pull request for the issue"
+               "/gemini please make a pr to add an ascii cat, three cats please one small one medium one large"
           ],
-          "cwd": "${workspaceFolder}/cloned_repo/github-for-gemini-demo",
+          "cwd": "${workspaceFolder}/cloned_repo/main",
           "console": "integratedTerminal",
           "envFile": "${workspaceFolder}/.env",
           "justMyCode": true,

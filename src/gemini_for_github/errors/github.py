@@ -1,3 +1,5 @@
+"""Custom exceptions for GitHub API client operations."""
+
 class GithubClientError(Exception):
     """Base class for all errors related to the GitHub client."""
 

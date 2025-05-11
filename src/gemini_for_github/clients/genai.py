@@ -41,7 +41,10 @@ logger = BASE_LOGGER.getChild("genai")
 
 
 class GenAIClient:
-    """Concrete implementation of AI model client using Google's Generative AI."""
+    """
+    A client for interacting with Google's Generative AI models (e.g., Gemini).
+    It handles content generation, tool calling, and retry logic for API requests.
+    """
 
     request_counter: int = 0
 
@@ -49,9 +52,9 @@ class GenAIClient:
         """Initialize the GenAI client.
 
         Args:
-            api_key: Google AI API key
-            model: Name of the model to use
-            temperature: Model temperature
+            api_key: Google AI API key.
+            model: Name of the specific Gemini model to use (e.g., "gemini-2.5-flash-preview-04-17").
+            temperature: Model temperature for controlling randomness in generation.
         """
 
         self.client: AsyncClient = Client(api_key=api_key).aio
@@ -72,9 +75,9 @@ class GenAIClient:
         """Generate content using the AI model.
 
         Args:
-            system_prompt: System prompt
-            user_prompt: User prompt
-            tools: Optional list of Tool objects available to the model
+            system_prompt: System prompt.
+            user_prompts: A list of user prompts or a dictionary of content parts.
+            tools: Optional list of Tool objects available to the model.
 
         Returns:
             Dictionary containing the generated response
@@ -132,6 +135,12 @@ class GenAIClient:
         return {"text": response.text, "tool_calls": response.prompt_feedback}
 
     def _log_tool_calls(self, calling_history: list[Content]):
+        """
+        Logs the details of function calls made by the model during content generation.
+
+        Args:
+            calling_history: A list of Content objects representing the history of tool calls.
+        """
         for tool_call in calling_history:
             if not tool_call.parts:
                 continue

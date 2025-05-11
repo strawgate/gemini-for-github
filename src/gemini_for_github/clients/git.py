@@ -10,10 +10,16 @@ logger = BASE_LOGGER.getChild("git")
 
 class GitClient:
     """
-    A client to invoke Git for code modifications.
+    A client for interacting with Git repositories using the `gitpython` library.
+    It handles operations like creating branches and pushing changes.
     """
 
     def __init__(self, repo_path: str = "."):
+        """Initializes the GitClient.
+
+        Args:
+            repo_path: The file system path to the Git repository. Defaults to the current directory.
+        """
         self.repo: Repo = Repo(repo_path)
         self.origin: Remote = self.repo.remotes.origin
         self.starting_branch: str = self.repo.active_branch.name

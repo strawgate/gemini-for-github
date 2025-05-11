@@ -1,3 +1,5 @@
+"""Custom exceptions for Git client operations."""
+
 class GitError(Exception):
     """Base class for Git errors."""
 

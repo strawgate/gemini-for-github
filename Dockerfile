@@ -26,6 +26,7 @@ COPY README.md README.md
 RUN poetry install
 
 ENV AIDER_DISABLE_PLAYWRIGHT=true
-
+ENV GIT_AUTHOR_NAME="gemini-for-github"
+ENV GIT_AUTHOR_EMAIL="gemini-for-github@strawgate.com"
 
 ENTRYPOINT ["python", "/app/src/gemini_for_github/main.py"]

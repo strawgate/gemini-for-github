@@ -1,8 +1,8 @@
 # Default activation keywords
 # Note: Activation keywords can be restricted by the CLI and will overwrite any activation keywords here.
 activation_keywords:
-  - gemini
-  - strawgate2.0
+  - /gemini
+  - /strawgate2.0
 
 # Available tools that can be used by any command. 
 # Note: Available tools can be restricted by the CLI and will overwrite any tools allowed here.

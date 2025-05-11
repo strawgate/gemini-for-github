@@ -141,7 +141,7 @@ class Config(BaseModel):
     mcp_servers: list[MCPServerConfiguration] = Field(..., description="The list of MCP servers that can be used.")
 
     @classmethod
-    def from_config_file(cls, config_file: ConfigFile, tool_restrictions: list[str] | None = None) -> Self:
+    def from_config_file(cls, config_file: ConfigFile, tool_restrictions: list[str] | None = None, command_restrictions: list[str] | None = None, activation_keywords: list[str] | None = None) -> Self:
         """Create a Config instance from a ConfigFile instance.
 
         Args:
@@ -149,7 +149,7 @@ class Config(BaseModel):
             tool_restrictions: An optional list of tools to restrict the commands to.
         """
         return cls(
-            activation_keywords=config_file.activation_keywords,
+            activation_keywords=activation_keywords or config_file.activation_keywords,
             system_prompt=config_file.system_prompt,
             mcp_servers=[MCPServerConfiguration.from_config_file_mcp_server_entry(mcp_server) for mcp_server in config_file.mcp_servers],
             commands=[
@@ -159,6 +159,7 @@ class Config(BaseModel):
                     tool_restrictions=tool_restrictions,
                 )
                 for cmd in config_file.commands
+                if not command_restrictions or cmd.name in command_restrictions
             ],
         )
 

@@ -25,12 +25,17 @@ from gemini_for_github.shared.logging import BASE_LOGGER
 logger = BASE_LOGGER.getChild("main")
 
 
-async def _load_config(config_file_path: str, tool_restrictions: str | None) -> tuple[Config, ConfigFile]:
+async def _load_config(config_file_path: str, tool_restrictions: str | None, command_restrictions: str | None, activation_keywords: str | None) -> tuple[Config, ConfigFile]:
     """Loads and parses the application configuration."""
     with Path(config_file_path).open() as f:
         config_data = yaml.safe_load(f)
     config_file = ConfigFile(**config_data)
-    config = Config.from_config_file(config_file, tool_restrictions=tool_restrictions.split(",") if tool_restrictions else None)
+
+    split_tool_restrictions = tool_restrictions.split(",") if tool_restrictions else None
+    split_command_restrictions = command_restrictions.split(",") if command_restrictions else None
+    split_activation_keywords = activation_keywords.split(",") if activation_keywords else None
+
+    config = Config.from_config_file(config_file, tool_restrictions=split_tool_restrictions, command_restrictions=split_command_restrictions, activation_keywords=split_activation_keywords)
     return config, config_file
 
 
@@ -137,11 +142,11 @@ async def _execute_command(system_prompt: str, user_prompts: list[str], genai_cl
 @asyncclick.option("--github-pr-number", type=int, envvar="GITHUB_PR_NUMBER", default=None, help="GitHub pull request number")
 @asyncclick.option("--model", type=str, default="gemini-2.5-flash-preview-04-17", envvar="GEMINI_MODEL", help="Gemini model to use")
 @asyncclick.option(
-    "--activation-restrictions",
+    "--activation-keywords",
     type=str,
     default=None,
-    envvar="ACTIVATION_RESTRICTIONS",
-    help="Comma-separated activation restrictions (e.g., gemini,bill2.0)",
+    envvar="ACTIVATION_KEYWORDS",
+    help="Comma-separated activation keywords (e.g., gemini,bill2.0)",
 )
 @asyncclick.option("--config-file", type=str, default=None, envvar="CONFIG_FILE", help="Path to the config file")
 @asyncclick.option(
@@ -159,7 +164,7 @@ async def cli(
     github_issue_number: int | None,
     github_pr_number: int | None,
     model: str,
-    activation_restrictions: str | None,
+    activation_keywords: str | None,
     config_file: str | None,
     tool_restrictions: str | None,
     command_restrictions: str | None,
@@ -174,9 +179,7 @@ async def cli(
 
         script_dir = Path(__file__).parent
         config_path = config_file if config_file else script_dir / "config" / "default.yaml"
-        config, _ = await _load_config(str(config_path), tool_restrictions)
-
-        allowed_commands = await _get_allowed_commands(config, command_restrictions)
+        config, _ = await _load_config(str(config_path), tool_restrictions, command_restrictions, activation_keywords)
 
         tools = {}
         github_client, github_tools = await _initialize_github_client(github_token, github_repo_id)
@@ -197,24 +200,29 @@ async def cli(
         genai_client = await _initialize_genai_client(gemini_api_key, model)
 
         # Filter commands based on activation keywords before selecting
-        if config.matches_activation_keyword(user_question, activation_restrictions):
-            command = await _select_command(user_question, allowed_commands, genai_client)
+        if config.matches_activation_keyword(user_question, config.activation_keywords):
+            command = await _select_command(user_question, config.commands, genai_client)
         else:
             logger.info("No activation keyword found in user question. Skipping command selection.")
             sys.exit(0)
 
-        command_allowed_tools = command.allowed_tools
+        # command_allowed_tools = command.allowed_tools
 
-        disallowed_tools: list[str] = []
-        allowed_tools: list[Callable] = []
-        allowed_tool_names: list[str] = []
+        # disallowed_tools: list[str] = []
+        # allowed_tools: list[Callable] = []
+        # allowed_tool_names: list[str] = []
 
-        for tool in tools:
-            if tool in command_allowed_tools:
-                allowed_tools.append(tools[tool])
-                allowed_tool_names.append(tool)
-            else:
-                disallowed_tools.append(tool)
+        # for tool in tools:
+        #     if tool in command_allowed_tools:
+        #         allowed_tools.append(tools[tool])
+        #         allowed_tool_names.append(tool)
+        #     else:
+        #         disallowed_tools.append(tool)
+
+        command_tools = [
+            tools[tool]
+            for tool in command.allowed_tools
+        ]
 
         context = {}
         if github_issue_number:
@@ -233,11 +241,9 @@ async def cli(
         user_prompt.append(template_string.substitute(context))
 
         system_prompt = config.system_prompt
-        logger.info(
-            f"Answering user question: {user_question}, allowing tools: {allowed_tool_names}, disallowing tools: {disallowed_tools}"
-        )
+        logger.info(f"Answering user question: {user_question} with tools: {command_tools}")
 
-        response = await _execute_command(system_prompt, user_prompt, genai_client, allowed_tools)
+        response = await _execute_command(system_prompt, user_prompt, genai_client, command_tools)
 
         logger.info(f"Response: {response}")
 

@@ -20,6 +20,12 @@ class GitClient:
 
         # self.head: Head | None = None
 
+    def set_safe_directory(self):
+        """
+        Set the safe directory for the Git client.
+        """
+        self.repo.git.config("safe.directory", "*")
+
     def get_tools(self) -> dict[str, Callable]:
         """Get the tools available to the Git client."""
         return {
@@ -47,6 +53,7 @@ class GitClient:
             raise GitBranchExistsError(msg)
 
         try:
+            self.set_safe_directory()
             self.repo.head.reference = self.repo.create_head(name)
             rem_ref = RemoteReference(self.repo, f"refs/remotes/{self.origin.name}/{name}")
             self.repo.head.reference.set_tracking_branch(rem_ref)

@@ -30,7 +30,7 @@ graph TD
 
 ## Installation
 
-(Add installation instructions here once available, e.g., using Poetry or pip)
+(Installation instructions will be added here once available, e.g., using Poetry or pip)
 
 ## Configuration
 
@@ -102,12 +102,14 @@ jobs:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           github_pr_number: ${{ github.event.pull_request.number }}
+          # Note: The user_question is hardcoded here. You might want to make this dynamic
+          # based on the PR title, body, or a specific comment if needed.
           user_question: "gemini review this pull request." # Or use a comment from the PR
 ```
 
 ## Contributing
 
-(Add contributing guidelines here)
+See [DEVELOPING.md](DEVELOPING.md) for information on setting up a development environment and contributing to this project.
 
 ## Development
 

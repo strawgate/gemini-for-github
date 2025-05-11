@@ -12,3 +12,7 @@ class GitPushError(GitError):
 
 class GitNewBranchError(GitError):
     """Error raised when a new branch cannot be created."""
+
+
+class GitCloneError(GitError):
+    """Error raised when a repository cannot be cloned."""

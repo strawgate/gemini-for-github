@@ -51,8 +51,8 @@ async def _initialize_github_client(github_token: str, github_repo_id: int) -> t
     return github_client, github_client.get_tools()
 
 
-async def _initialize_git_client(repo_path: Path) -> tuple[GitClient, dict[str, Callable]]:
-    git_client = GitClient(repo_path=str(repo_path))
+async def _initialize_git_client(repo_path: Path, github_repo: str) -> tuple[GitClient, dict[str, Callable]]:
+    git_client = GitClient(repo=github_repo, repo_path=str(repo_path))
     return git_client, git_client.get_tools()
 
 
@@ -143,6 +143,7 @@ async def _execute_command(system_prompt: str, user_prompts: list[str], genai_cl
 
 @asyncclick.command()
 @asyncclick.option("--github-token", type=str, required=True, envvar="GITHUB_TOKEN", help="GitHub API token")
+@asyncclick.option("--github-repo", type=str, required=True, envvar="GITHUB_REPO", help="GitHub repository owner/name")
 @asyncclick.option("--github-repo-id", type=int, required=True, envvar="GITHUB_REPO_ID", help="GitHub repository ID")
 @asyncclick.option("--gemini-api-key", type=str, required=True, envvar="GEMINI_API_KEY", help="Gemini API key")
 @asyncclick.option("--github-issue-number", type=int, envvar="GITHUB_ISSUE_NUMBER", default=None, help="GitHub issue number")
@@ -166,6 +167,7 @@ async def _execute_command(system_prompt: str, user_prompts: list[str], genai_cl
 @asyncclick.option("--user-question", type=str, required=True, envvar="USER_QUESTION", help="The user's natural language question")
 async def cli(
     github_token: str,
+    github_repo: str,
     github_repo_id: int,
     gemini_api_key: str,
     github_issue_number: int | None,
@@ -192,7 +194,7 @@ async def cli(
         github_client, github_tools = await _initialize_github_client(github_token, github_repo_id)
         tools.update(github_tools)
 
-        git_client, git_tools = await _initialize_git_client(root_path)
+        git_client, git_tools = await _initialize_git_client(root_path, github_repo)
         tools.update(git_tools)
 
         filesystem_client, filesystem_tools = await _initialize_filesystem_client(root_path)

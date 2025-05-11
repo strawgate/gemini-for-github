@@ -10,6 +10,10 @@ inputs:
   github_token:
     description: "The GitHub token for authentication."
     required: true
+  github_repository:
+    description: "The GitHub repository owner/name."
+    required: true
+    default: "${{ github.repository }}"
   github_repo_id:
     description: "The GitHub repository ID."
     required: true
@@ -57,6 +61,7 @@ runs:
     GEMINI_API_KEY: ${{ inputs.gemini_api_key }}
     GITHUB_TOKEN: ${{ inputs.github_token }}
     GITHUB_OWNER: ${{ inputs.github_owner }}
+    GITHUB_REPO: ${{ inputs.github_repository }}
     GITHUB_REPO_ID: ${{ inputs.github_repo_id }}
     GITHUB_ISSUE_NUMBER: ${{ inputs.github_issue_number }}
     GITHUB_PR_NUMBER: ${{ inputs.github_pr_number }}

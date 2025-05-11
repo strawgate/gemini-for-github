@@ -49,7 +49,7 @@ class AiderClient:
         Returns:
             A string containing the results of the Aider execution.
         """
-        logger.info(f"Invoking Aider with prompt: {prompt[:100]}...")
+        logger.info(f"Invoking Aider in {Path.cwd()}with prompt: {prompt[:100]}...")
 
         try:
             result = self.coder.run(with_message=prompt)

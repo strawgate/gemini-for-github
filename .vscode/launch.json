@@ -13,6 +13,7 @@
                 "--user-question",
                 "/gemini make a pr to fix this please"
            ],
+           "cwd": "${workspaceFolder}/action_testing",
            "console": "integratedTerminal",
            "envFile": "${workspaceFolder}/.env",
            "justMyCode": true,
@@ -27,9 +28,9 @@
                "--github-issue-number",
                "6",
                "--user-question",
-               "/gemini please make a pr to add an ascii cat, three cats please one small one medium one large"
+               "/gemini please make a pr to add an ascii cat, there already is one but the cat is not big enough and not smiling"
           ],
-          "cwd": "${workspaceFolder}/cloned_repo/main",
+          "cwd": "${workspaceFolder}/action_testing",
           "console": "integratedTerminal",
           "envFile": "${workspaceFolder}/.env",
           "justMyCode": true,

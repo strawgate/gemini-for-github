@@ -1,8 +1,8 @@
 import os
+import shutil
 from collections.abc import Callable
 from contextlib import contextmanager
 from pathlib import Path
-import shutil
 
 from git import RemoteReference, Repo
 

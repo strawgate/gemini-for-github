@@ -1,224 +1,544 @@
+"""
+MCP Server for performing file operations.
+
+This server provides tools for reading, creating, appending, erasing, moving,
+and deleting files, with centralized exception handling.
+"""
+
 from collections.abc import Callable
-from contextlib import contextmanager
-from fnmatch import fnmatch
+import os
 from pathlib import Path
-from typing import Union
+import shutil
+from contextlib import asynccontextmanager
+from fnmatch import fnmatch
 
-from pydantic import BaseModel
+from fastmcp.contrib.mcp_mixin import MCPMixin
+from pydantic import BaseModel, Field
 
-from gemini_for_github.errors.filesystem import FilesystemError, FilesystemNotFoundError, FilesystemOutsideRootError, FilesystemReadError
 from gemini_for_github.shared.logging import BASE_LOGGER
 
 logger = BASE_LOGGER.getChild("filesystem")
 
+DEFAULT_SKIP_LIST = [
+    "**/.?*/**",
+    ".?*/**",  # exclude hidden folders
+    "**/.?*",  # exclude hidden files
+    "**/.git/**",
+    ".git/*",
+    "**/.svn/**",
+    ".svn/*",
+    "**/.mypy_cache/**",
+    ".mypy_cache/*",
+    "**/.pytest_cache/**",
+    "*.pytest_cache/*",
+    "**/__pycache__/**",
+    "*__pycache__/*",
+    "**/.venv/**",
+    ".venv/*",
+]
 
-class DirectoryInfo(BaseModel):
-    name: str
-    relative_path: str
-    children: list["FileInfo | DirectoryInfo"]
-    children_count: int
+DEFAULT_SKIP_READ = [
+    "*.pyc",
+    "*.pyo",
+    "*.pyd",
+    "*.hg",
+    "*.tox",
+    "*.com",
+    "*.class",
+    "*.dll",
+    "*.exe",
+    "*.o",
+    "*.so",
+    "*.7z",
+    "*.dmg",
+    "*.gz",
+    "*.iso",
+    "*.jar",
+    "*.rar",
+    "*.tar",
+    "*.zip",
+    "*.msi",
+    "*.sqlite",
+    "*.DS_Store",
+    "*.DS_Store?",
+    "*._*",
+    "*.Spotlight-V100",
+    "*.Trashes",
+    "*ehthumbs.db",
+    "*Thumbs.db",
+    "*desktop.ini",
+    "*.bak",
+    "*.swp",
+    "*.swo",
+    "*~",
+    "*#",
+]
 
 
-class FileInfo(BaseModel):
-    name: str
-    extension: str
-    relative_path: str
-    size: int
-    modified: float
+class MCPFileSystemOperationError(Exception):
+    """Base exception for bulk filesystem operations."""
 
 
-class FilesystemClient:
+class MCPFileOperationError(MCPFileSystemOperationError):
+    """Exception raised for errors during file operations."""
+
+    def __init__(self, message, file_path):
+        self.file_path = file_path
+        super().__init__(f"Error performing operation on file {file_path}: {message}")
+
+
+class MCPFolderOperationError(MCPFileSystemOperationError):
+    """Exception raised for errors during folder operations."""
+
+    def __init__(self, message, folder_path):
+        self.folder_path = folder_path
+        super().__init__(f"Error performing operation on folder {folder_path}: {message}")
+
+
+class MCPFileNotFoundError(MCPFileOperationError):
+    """Exception raised when a file is not found."""
+
+    def __init__(self, file_path):
+        super().__init__("File not found", file_path)
+
+
+class MCPFolderNotFoundError(MCPFolderOperationError):
+    """Exception raised when a folder is not found."""
+
+    def __init__(self, folder_path):
+        super().__init__("Folder not found", folder_path)
+
+
+@asynccontextmanager
+async def handle_file_errors(path: str):
     """
-    A client for interacting with the local filesystem.
-    It provides methods for retrieving file and directory information and content,
-    ensuring that all operations are scoped within a defined root directory.
+    Async context manager to handle file operation exceptions.
+    """
+    try:
+        logger.info(f"Handling file operation for {path}")
+        yield
+        logger.info(f"File operation completed successfully for {path}")
+    except FileNotFoundError as e:
+        msg = f"File not found: {e}"
+        logger.exception(msg)
+        raise MCPFileNotFoundError(path) from e
+    except PermissionError as e:
+        msg = f"Permission denied: {e}"
+        logger.exception(msg)
+        raise MCPFileOperationError(msg, path) from e
+    except Exception as e:
+        msg = f"An unexpected error occurred: {e}"
+        logger.exception(msg)
+        raise MCPFileOperationError(msg, path) from e
+
+
+@asynccontextmanager
+async def handle_folder_errors(path: str):
+    """
+    Async context manager to handle folder operation exceptions.
+    """
+    try:
+        logger.info(f"Handling folder operation for {path}")
+        yield
+        logger.info(f"Folder operation completed successfully for {path}")
+    except FileNotFoundError as e:
+        msg = f"File not found: {e}"
+        logger.exception(msg)
+        raise MCPFolderNotFoundError(path) from e
+    except PermissionError as e:
+        msg = f"Permission denied: {e}"
+        logger.exception(msg)
+        raise MCPFolderOperationError(msg, path) from e
+    except Exception as e:
+        msg = f"An unexpected error occurred: {e}"
+        logger.exception(msg)
+        raise MCPFolderOperationError(msg, path) from e
+
+
+class FileOperations:
+    """
+    This class provides tools to manipulate files.
+
+    It includes methods for reading, creating, appending, erasing, moving,
+    and deleting files, with integrated custom exception handling.
     """
 
-    root: Path
-
-    def __init__(self, root: Path):
-        """Initializes the FilesystemClient.
-
-        Args:
-            root: The root directory for all filesystem operations.
-                  Paths accessed via this client will be relative to this root.
+    def __init__(self, root_dir: Path):
         """
-        self.root = root
+        Initializes the FileOperations class.
+        Args:
+            root_dir: The root directory to perform file operations on.
+        """
+        self.root_dir = root_dir
 
     def get_tools(self) -> dict[str, Callable]:
-        """Get the tools available to the Filesystem client."""
+        """Get the tools available to the file operations."""
         return {
-            "get_file_info": self.get_file_info,
-            "get_file_content": self.get_file_content,
-            "get_directory_info": self.get_directory_info,
+            "file_read": self.read,
+            "file_create": self.create,
+            "file_append": self.append,
+            "file_erase": self.erase,
+            "file_move": self.move,
+            "file_delete": self.delete,
         }
 
-    @contextmanager
-    def error_handler(self, path: str, msg: str):
+    async def read(self, file_path: str) -> str:
         """
-        A context manager for handling common filesystem errors.
-        It wraps filesystem operations and raises specific FilesystemError
-        subclasses for known issues, or a generic FilesystemError for unknown exceptions.
+        Reads the content of a file at the specified path.
 
         Args:
-            path: The path involved in the operation, used for logging.
-            msg: A descriptive message for the generic FilesystemError.
-        """
-        try:
-            yield Path(path)
-        except FilesystemError as e:
-            raise e
-        except Exception as e:
-            logger.exception(f"Unknown error occurred while getting file info for {path}")
-            raise FilesystemError(msg) from e
-
-    def _get_rendered_path(self, root_dir: Path, relative_path: Path) -> Path:
-        """
-        Resolves a relative path against a root directory and ensures it's within that root.
-
-        Args:
-            root_dir: The absolute root directory.
-            relative_path: The path relative to the root_dir.
+            file_path: The path of the file to read.
 
         Returns:
-            The resolved absolute path.
-
-        Raises:
-            FilesystemOutsideRootError: If the resolved path is outside the root_dir.
+            str: The content of the file.
         """
-        rendered_path = Path(root_dir).joinpath(relative_path).resolve()
+        async with handle_file_errors(file_path):
+            with open(file_path, encoding="utf-8") as f:
+                content = f.read()
+            logger.info(f"File read successfully from {file_path}")
+            return content
 
-        if not rendered_path.relative_to(root_dir.resolve()):
-            msg = f"File {relative_path} is not a child of the root directory"
-            raise FilesystemOutsideRootError(msg)
-
-        return rendered_path
-
-    def get_file_info(self, relative_path: str) -> FileInfo:
+    async def create(self, file_path: str, content: str) -> bool:
         """
-        Gets information about a file.
+        Creates a file with the specified content.
 
         Args:
-            relative_path: The path to the file, relative to the client's root directory.
+            file_path: The path where the file should be created.
+            content: The content to write into the file.
 
         Returns:
-            A FileInfo object containing details about the file.
+            bool: True if the file was created successfully, False otherwise.
         """
-        logger.info(f"Getting file info for {relative_path}")
+        async with handle_file_errors(file_path):
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(content)
+            logger.info(f"File created successfully at {file_path}")
+            return True
 
-        with self.error_handler(relative_path, "Failed to get file info") as p:
-            if not p.is_file():
-                msg = f"File {relative_path} is not a file"
-                raise FilesystemNotFoundError(msg)
-
-            rendered_path = self._get_rendered_path(self.root, p)
-            rendered_relative_path = rendered_path.relative_to(self.root)
-            size = p.stat().st_size
-            modified = p.stat().st_mtime
-
-        return FileInfo(
-            name=p.name,
-            extension=p.suffix,
-            relative_path=str(rendered_relative_path),
-            size=size,
-            modified=modified,
-        )
-
-    def get_file_content(self, relative_path: str) -> str:
+    async def append(self, file_path: str, content: str) -> bool:
         """
-        Gets the content of a file.
+        Appends content to an existing file.
 
         Args:
-            relative_path: The path to the file, relative to the client's root directory.
+            file_path: The path of the file to append content to.
+            content: The content to append to the file.
 
         Returns:
-            The content of the file as a string.
+            bool: True if the content was appended successfully, False otherwise.
         """
-        logger.info(f"Getting file content for {relative_path}")
+        async with handle_file_errors(file_path):
+            with open(file_path, "a", encoding="utf-8") as f:
+                f.write(content)
+            logger.info(f"Content appended successfully to {file_path}")
+            return True
 
-        with self.error_handler(relative_path, "Failed to get file content") as p:
-            try:
-                rendered_path = self._get_rendered_path(self.root, p)
-                return rendered_path.read_text()
-            except Exception as e:
-                msg = f"Failed to read file {relative_path}"
-                raise FilesystemReadError(msg) from e
-
-    def get_files_content(self, relative_paths: list[str]) -> dict[str, str]:
+    async def erase(self, file_path: str) -> bool:
         """
-        Gets the content of multiple files.
+        Erases the content of a file.
 
         Args:
-            relative_paths: A list of paths to the files, relative to the client's root directory.
+            file_path: The path of the file to erase.
 
         Returns:
-            A dictionary where keys are relative paths and values are file contents.
+            bool: True if the file was erased successfully, False otherwise.
         """
-        return {relative_path: self.get_file_content(relative_path) for relative_path in relative_paths}
+        async with handle_file_errors(file_path):
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write("")
+            logger.info(f"File content erased successfully at {file_path}")
+            return True
 
-    def get_directory_info(
+    async def move(self, source_path: str, destination_path: str) -> bool:
+        """
+        Moves a file from source to destination.
+
+        Args:
+            source_path: The current path of the file.
+            destination_path: The new path where the file should be moved.
+
+        Returns:
+            bool: True if the file was moved successfully, False otherwise.
+        """
+        async with handle_file_errors(source_path):
+            os.rename(source_path, destination_path)
+            logger.info(f"File moved from {source_path} to {destination_path}")
+            return True
+
+    async def delete(self, file_path: str) -> bool:
+        """
+        Deletes a file at the specified path.
+
+        Args:
+            file_path: The path of the file to delete.
+
+        Returns:
+            bool: True if the file was deleted successfully, False otherwise.
+        """
+        async with handle_file_errors(file_path):
+            os.remove(file_path)
+            logger.info(f"File deleted successfully at {file_path}")
+            return True
+
+
+class BaseMultiFileReadResult(BaseModel):
+    file_path: str
+
+
+class FileReadError(BaseMultiFileReadResult):
+    """
+    A model to represent an error that occurred while reading a file.
+
+    Attributes:
+        file_path (str): The path of the file that caused the error.
+        error (str): The error message.
+    """
+
+    error: str
+
+
+class FileReadSuccess(BaseModel):
+    """
+    A model to represent a successful file read operation.
+
+    Attributes:
+        file_path (str): The path of the file that was read.
+        content (str): The content of the file.
+    """
+
+    file_path: str
+    content: str
+
+
+class FileReadSummary(BaseModel):
+    """
+    A model to summarize the results of reading files.
+
+    Attributes:
+        total_files (int): The total number of files read.
+        successful_reads (int): The number of files read successfully.
+        errors (list[FileReadError]): A list of errors encountered while reading files.
+    """
+
+    total_files: int = Field(default=0, description="Total number of files processed")
+    skipped_files: int = Field(default=0, description="Number of files skipped due to exclusions")
+    errors: list[FileReadError] = Field(default_factory=list, description="List of errors encountered while reading files")
+    results: list[FileReadSuccess] = Field(default_factory=list, description="List of successfully read files with their content")
+
+
+class FolderOperations(MCPMixin):
+    """
+    This class provides MCP tools to manipulate folders.
+
+    It includes methods for creating, listing contents, moving, deleting,
+    and emptying folders, with integrated custom exception handling.
+    """
+
+    read_file_exclusions: list[str] = Field(
+        default_factory=list, description="List of file patterns to exclude from all multi-read operations."
+    )
+    list_folder_exclusions: list[str] = Field(
+        default_factory=list, description="List of folder patterns to exclude from listing operations."
+    )
+
+    def __init__(self, root_dir: Path):
+        """
+        Initializes the FolderOperations class.
+        Args:
+            denied_operations: A list of operations that should be denied.
+        """
+        self.read_file_exclusions = DEFAULT_SKIP_READ
+        self.list_folder_exclusions = DEFAULT_SKIP_LIST
+        self.root_dir = root_dir
+        super().__init__()
+
+    def get_tools(self) -> dict[str, Callable]:
+        """Get the tools available to the folder operations."""
+        return {
+            "folder_contents": self.contents,
+            "folder_read_all": self.read_all,
+            "folder_move": self.move,
+            "folder_delete": self.delete,
+        }
+
+    async def create(self, folder_path: str) -> bool:
+        """
+        Creates a folder at the specified path.
+
+        Args:
+            folder_path: The path where the folder should be created.
+
+        Returns:
+            bool: True if the folder was created successfully, False otherwise.
+        """
+        async with handle_folder_errors(folder_path):
+            os.makedirs(folder_path, exist_ok=True)
+            logger.info(f"Folder created successfully at {folder_path}")
+            return True
+
+    def _matches_globs(self, path: str, include: list[str], exclude: list[str]) -> bool:
+        """
+        Checks if the given path matches the include and exclude glob patterns.
+
+        Args:
+            path: The path to check.
+            include: A list of glob patterns to include specific files.
+            exclude: A list of glob patterns to exclude specific files.
+
+        Returns:
+            bool: True if the path matches the include patterns and does not match the exclude patterns.
+        """
+
+        if include:
+            included = any(fnmatch(path, pat) for pat in include)
+        else:
+            included = True
+
+        excluded = any(fnmatch(path, pat) for pat in exclude)
+
+        return included and not excluded
+
+    async def contents(
+        self, folder_path: str, include: list[str], exclude: list[str], recurse: bool, bypass_default_exclusions: bool = False
+    ) -> list:
+        """
+        Lists the contents of a folder.
+         If you are listing items recursively, the include and exclude patterns will
+         apply to the relative path of the items. So to capture all files of a certain type
+         in a folder and its subfolders, you would use a pattern like `**/*.txt` for `include`.
+
+        Args:
+            folder_path: The path of the folder to list.
+            include: A list of glob patterns to include specific files, applies to the relative path.
+            exclude: A list of glob pattern to exclude specific files, applies to the relative path.
+            recurse: If True, lists contents recursively.
+
+        Returns:
+            list: A list of items in the folder.
+        """
+        async with handle_folder_errors(folder_path):
+            contents = []
+
+            if recurse:
+                for dir_, _, files in os.walk(folder_path):
+                    for file_name in files:
+                        rel_dir = os.path.relpath(dir_, folder_path)
+                        rel_file = os.path.join(rel_dir, file_name)
+
+                        if not bypass_default_exclusions:
+                            # Check if the file matches any default exclusion patterns
+                            if not self._matches_globs(rel_file, include=["*"], exclude=self.list_folder_exclusions):
+                                logger.debug(f"Skipping file due to folder exclusions: {rel_file}")
+                                continue
+
+                        if self._matches_globs(rel_file, include, exclude):
+                            contents.append(rel_file)
+                            logger.debug(f"Included file: {rel_file}")
+            else:
+                contents = os.listdir(folder_path)
+
+            logger.info(f"Contents of {folder_path} listed successfully")
+            return contents
+
+    async def read_all(
         self,
-        relative_path: str = ".",
-        levels: int = 1,
-        exclude_hidden: bool = True,
-        exclude_globs: Union[list[str], None] = None,  # noqa: UP007
-        include_globs: Union[list[str], None] = None,  # noqa: UP007
-    ) -> DirectoryInfo:
-        """Get the directory info for a given relative path.
+        folder_path: str,
+        include: list[str],
+        exclude: list[str],
+        recurse: bool,
+        head: int = 0,
+        tail: int = 0,
+        bypass_default_exclusions: bool = False,
+    ) -> FileReadSummary:
+        """
+        Provides the full contents (every character) of every file in a folder.
+         If you are listing items recursively, the include and exclude patterns will
+         apply to the relative path of the items. So to capture all files of a certain type
+         in a folder and its subfolders, you would use a pattern like `**/*.txt` for `include`.
 
         Args:
-            relative_path: The relative path to the directory to get the info for.
-            levels: The number of levels to include in the directory info.
-            exclude_hidden: Whether to exclude hidden files. You must disable this to see gitignore and other hidden files.
-            exclude_globs: A list of globs to exclude from the directory info.
-            include_globs: A list of globs to include in the directory info.
+            folder_path: The path of the folder to list.
+            include: A glob pattern to include specific files, applies to the relative path.
+            exclude: A glob pattern to exclude specific files, applies to the relative path.
+            recurse: If True, reads files recursively.
+            head: Number of lines to read from the start of each file (default is 0, meaning read all).
+            tail: Number of lines to read from the end of each file (default is 0, meaning read all).
+            bypass_default_exclusions: If True, skips the default exclusions for reading files.
 
         Returns:
-            The directory info for the given relative path.
+            list[FileReadSuccess | FileReadError]: A list of results containing the file path and content or error.
         """
-        logger.info(
-            f"Getting directory info for {relative_path} with levels {levels}, exclude_hidden {exclude_hidden}, exclude_globs {exclude_globs}, include_globs {include_globs}"
-        )
+        async with handle_folder_errors(folder_path):
+            files = await self.contents(folder_path, include, exclude, recurse, bypass_default_exclusions)
+            unfiltered_file_count = len(await self.contents(folder_path, [], [], recurse, bypass_default_exclusions))
 
-        with self.error_handler(relative_path, "Failed to get directory info") as p:
-            rendered_path = self._get_rendered_path(self.root, p)
-            rendered_relative_path = rendered_path.relative_to(self.root)
+            results: list[FileReadSuccess] = []
+            errors: list[FileReadError] = []
 
-            logger.info(f"Rendered path: {rendered_path}")
+            for file in files:
+                file_path = os.path.join(folder_path, file)
 
-            if not rendered_path.is_dir():
-                msg = f"Directory {relative_path} is not a directory"
-                raise FilesystemNotFoundError(msg)
+                if not bypass_default_exclusions:
+                    # Check if the file matches any default exclusion patterns
+                    if not self._matches_globs(file, include=["*"], exclude=self.read_file_exclusions):
+                        logger.debug(f"Skipping file due to exclusion: {file_path}")
+                        continue
 
-            children = (
-                [child for child in rendered_path.iterdir() if not child.name.startswith(".")]
-                if exclude_hidden
-                else list(rendered_path.iterdir())
+                if not os.path.isfile(file_path):
+                    continue
+                try:
+                    with open(file_path, encoding="utf-8", errors="strict") as f:
+                        if head > 0:
+                            content = "".join(f.readlines()[:head])
+                        elif tail > 0:
+                            f.seek(0, os.SEEK_END)
+                            f.seek(max(0, f.tell() - tail), os.SEEK_SET)
+                            content = f.read()
+                        else:
+                            content = f.read()
+                    results.append(FileReadSuccess(file_path=file, content=content))
+                    logger.debug(f"File read successfully: {file_path}")
+                except Exception as e:
+                    errors.append(FileReadError(file_path=file, error=str(e)))
+                    logger.error(f"Error reading file {file_path}: {e}")
+
+            return FileReadSummary(
+                total_files=len(files),
+                skipped_files=unfiltered_file_count - len(files),
+                errors=errors,
+                results=results,
             )
 
-            logger.info(f"Children: {children}")
+    async def move(self, source_path: str, destination_path: str) -> bool:
+        """
+        Moves a folder from source to destination.
 
-            if exclude_globs:
-                children = [child for child in children if not any(fnmatch(child.name, glob) for glob in exclude_globs)]
+        Args:
+            source_path: The current path of the folder.
+            destination_path: The new path where the folder should be moved.
 
-            if include_globs:
-                children = [child for child in children if any(fnmatch(child.name, glob) for glob in include_globs)]
+        Returns:
+            bool: True if the folder was moved successfully, False otherwise.
+        """
+        async with handle_folder_errors(source_path):
+            os.rename(source_path, destination_path)
+            logger.info(f"Folder moved from {source_path} to {destination_path}")
+            return True
 
-            logger.info(f"Children after exclude_globs and include_globs: {children}")
+    async def delete(self, folder_path: str, recursive: bool = False) -> bool:
+        """
+        Deletes a folder at the specified path.
 
-            children_count = len(children)
+        Args:
+            folder_path: The path of the folder to delete.
+            recursive: If True, deletes the folder and all its contents recursively.
 
-            if levels == 0:
-                return DirectoryInfo(
-                    name=rendered_relative_path.name, relative_path=str(rendered_relative_path), children=[], children_count=children_count
-                )
-
-            children = [
-                self.get_file_info(str(child)) if child.is_file() else self.get_directory_info(str(child), levels - 1) for child in children
-            ]
-
-            logger.info(f"Directory {relative_path} has {children_count} children: {children}")
-
-        return DirectoryInfo(
-            name=rendered_relative_path.name, relative_path=str(rendered_relative_path), children=children, children_count=children_count
-        )
+        Returns:
+            bool: True if the folder was deleted successfully, False otherwise.
+        """
+        async with handle_folder_errors(folder_path):
+            if recursive:
+                shutil.rmtree(folder_path)
+            else:
+                os.rmdir(folder_path)
+            logger.info(f"Folder deleted successfully at {folder_path}")
+            return True

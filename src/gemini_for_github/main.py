@@ -10,7 +10,7 @@ import yaml
 from pydantic import ValidationError
 
 from gemini_for_github.clients.aider import AiderClient
-from gemini_for_github.clients.filesystem import FilesystemClient
+from gemini_for_github.clients.filesystem import FileOperations, FolderOperations
 from gemini_for_github.clients.genai import GenAIClient
 from gemini_for_github.clients.git import GitClient
 from gemini_for_github.clients.github import GitHubAPIClient
@@ -59,11 +59,11 @@ async def _initialize_git_client(repo_dir: Path, github_token: str, owner_repo: 
     git_client = GitClient(repo_dir=str(repo_dir), github_token=github_token, owner_repo=owner_repo)
     return git_client, git_client.get_tools()
 
-
-async def _initialize_filesystem_client(root_path: Path) -> tuple[FilesystemClient, dict[str, Callable]]:
+async def _initialize_filesystem_client(root_path: Path) -> tuple[FileOperations, FolderOperations, dict[str, Callable]]:
     """Initializes and returns the Filesystem client and its tools."""
-    filesystem_client = FilesystemClient(root=root_path)
-    return filesystem_client, filesystem_client.get_tools()
+    file_operations = FileOperations(root_dir=root_path)
+    folder_operations = FolderOperations(root_dir=root_path)
+    return file_operations, folder_operations, {**file_operations.get_tools(), **folder_operations.get_tools()}
 
 
 async def _initialize_genai_client(gemini_api_key: str, model: str) -> GenAIClient:
@@ -214,7 +214,7 @@ async def cli(
         git_client, git_tools = await _initialize_git_client(repo_dir, github_token, github_repo)
         tools.update(git_tools)
 
-        filesystem_client, filesystem_tools = await _initialize_filesystem_client(root_path)
+        file_operations, folder_operations, filesystem_tools = await _initialize_filesystem_client(root_path)
         tools.update(filesystem_tools)
 
         aider_client, aider_tools = await _initialize_aider_client(root_path, model)

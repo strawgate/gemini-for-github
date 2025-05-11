@@ -13,9 +13,16 @@ globally_allowed_tools:
   - clone_repository
   - get_issue_with_comments
   - create_issue_comment
-  - get_file_info
-  - get_file_content
-  - get_directory_info
+  - folder_contents
+  - folder_read_all
+  - folder_move
+  - folder_delete
+  - file_read
+  - file_create
+  - file_append
+  - file_erase
+  - file_move
+  - file_delete
 # Command prompts
 # Note: Command prompts can be restricted by the CLI.
 

@@ -1,5 +1,6 @@
 FROM python:3.12
 
+
 ENV CONFIG_FILE="/app/src/gemini_for_github/config/default.yaml"
 
 ENV POETRY_HOME="/opt/poetry" \
@@ -23,5 +24,7 @@ COPY poetry.lock poetry.lock
 COPY README.md README.md
 
 RUN poetry install
+
+USER 1000
 
 ENTRYPOINT ["python", "/app/src/gemini_for_github/main.py"]

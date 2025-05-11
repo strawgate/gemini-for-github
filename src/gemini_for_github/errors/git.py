@@ -19,3 +19,7 @@ class GitNewBranchError(GitClientError):
 
 class GitCloneError(GitClientError):
     """Error raised when a repository cannot be cloned."""
+
+
+class GitConfigError(GitClientError):
+    """Error raised when git configuration fails."""

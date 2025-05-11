@@ -6,7 +6,7 @@ from pathlib import Path
 
 from git import RemoteReference, Repo
 
-from gemini_for_github.errors.git import GitBranchExistsError, GitClientError, GitCloneError, GitNewBranchError, GitPushError
+from gemini_for_github.errors.git import GitBranchExistsError, GitClientError, GitCloneError, GitConfigError, GitNewBranchError, GitPushError
 from gemini_for_github.shared.logging import BASE_LOGGER
 
 logger = BASE_LOGGER.getChild("git")
@@ -99,6 +99,10 @@ class GitClient:
             rem_ref = RemoteReference(self.repo, f"refs/remotes/{self.origin.name}/{name}")
             self.repo.head.reference.set_tracking_branch(rem_ref)
             self.repo.head.reference.checkout()
+
+        with self.error_handler("configuring git", f"branch name: {name}", GitConfigError):
+            self.repo.config_writer().set_value("user", "name", "gemini-for-github").release()
+            self.repo.config_writer().set_value("user", "email", "gemini-for-github@strawgate.com").release()
 
     def push_current_branch(self):
         """

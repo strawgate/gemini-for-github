@@ -25,9 +25,7 @@ from gemini_for_github.shared.logging import BASE_LOGGER
 logger = BASE_LOGGER.getChild("main")
 
 
-async def _load_config(
-    config_file_path: str, tool_restrictions: str | None, command_restrictions: str | None
-) -> tuple[Config, ConfigFile]:
+async def _load_config(config_file_path: str, tool_restrictions: str | None, command_restrictions: str | None) -> tuple[Config, ConfigFile]:
     """Loads and parses the application configuration."""
     with Path(config_file_path).open() as f:
         config_data = yaml.safe_load(f)
@@ -57,6 +55,7 @@ async def _initialize_git_client(repo_dir: Path, github_token: str, owner_repo: 
     git_client = GitClient(repo_dir=str(repo_dir), github_token=github_token, owner_repo=owner_repo)
     return git_client, git_client.get_tools()
 
+
 async def _initialize_filesystem_client(root_path: Path) -> tuple[FileOperations, FolderOperations, dict[str, Callable]]:
     """Initializes and returns the Filesystem client and its tools."""
     file_operations = FileOperations(root_dir=root_path)
@@ -64,10 +63,10 @@ async def _initialize_filesystem_client(root_path: Path) -> tuple[FileOperations
     return file_operations, folder_operations, {**file_operations.get_tools(), **folder_operations.get_tools()}
 
 
-async def _initialize_genai_client(gemini_api_key: str, model: str) -> tuple[GenAIClient, dict[str, Callable]]:
+async def _initialize_genai_client(gemini_api_key: str, model: str, thinking: bool) -> tuple[GenAIClient, dict[str, Callable]]:
     """Initializes and returns the GenAI client."""
 
-    genai_client = GenAIClient(api_key=gemini_api_key, model=model)
+    genai_client = GenAIClient(api_key=gemini_api_key, model=model, thinking=thinking)
     genai_tools = genai_client.get_tools()
     return genai_client, genai_tools
 
@@ -97,8 +96,8 @@ async def _initialize_mcp_servers(config_file: ConfigFile) -> tuple[list[MCPServ
 async def _select_command(user_question: str, commands: list[Command], genai_client: GenAIClient) -> Command:
     """Selects the most appropriate command based on the user's question."""
     system_prompt = f"""
-    You are a GitHub based AI Agent. You receive plain text questions from the user and you need to determine which command, if any 
-    most closely matches the user's request.
+    You are a GitHub based AI Agent. You receive plain text questions from the user and you need to determine which
+    command, if any most closely matches the user's request.
 
     Available Commands and when they are appropriate to use:
     {"- " + chr(10).join([f"{cmd.name}: Appropriate when the developer asks you to {cmd.description}" for cmd in commands])}
@@ -113,20 +112,19 @@ async def _select_command(user_question: str, commands: list[Command], genai_cli
     logger.info(f"Calling Gemini for command selection... of {user_question}")
 
     command_selection_response = await genai_client.generate_content(system_prompt, [user_prompt], tools=[])
-    selected_command_name = command_selection_response.get("text", "")
 
-    if not selected_command_name:
+    if not command_selection_response:
         msg = f"Gemini did not select a command for {user_question}"
         raise CommandNotSelectedError(msg)
 
-    selected_command_name = selected_command_name.strip()
+    command_selection_response = command_selection_response.strip()
 
-    logger.info(f"Model selected command: {selected_command_name}")
+    logger.info(f"Model selected command: {command_selection_response}")
 
-    selected_command = next((cmd for cmd in commands if cmd.name == selected_command_name), None)
+    selected_command = next((cmd for cmd in commands if cmd.name == command_selection_response), None)
 
     if not selected_command:
-        msg = f"Command '{selected_command_name}' not found"
+        msg = f"Command '{command_selection_response}' not found"
         raise CommandNotFoundError(msg)
 
     return selected_command
@@ -147,7 +145,7 @@ async def _execute_command(system_prompt: str, user_prompts: list[str], genai_cl
 
     logger.info("Calling Gemini for prompt execution")
     final_response = await genai_client.generate_content(system_prompt, user_prompts, tools=tools)  # type: ignore
-    logger.info("Gemini believes it has completed the task.")
+    logger.info(f"Gemini believes it has completed the task: {final_response}")
 
 
 @asyncclick.command()
@@ -158,6 +156,7 @@ async def _execute_command(system_prompt: str, user_prompts: list[str], genai_cl
 @asyncclick.option("--github-issue-number", type=int, envvar="GITHUB_ISSUE_NUMBER", default=None, help="GitHub issue number")
 @asyncclick.option("--github-pr-number", type=int, envvar="GITHUB_PR_NUMBER", default=None, help="GitHub pull request number")
 @asyncclick.option("--model", type=str, default="gemini-2.5-flash-preview-04-17", envvar="GEMINI_MODEL", help="Gemini model to use")
+@asyncclick.option("--thinking", type=bool, default=True, envvar="THINKING", help="Enable thinking mode")
 @asyncclick.option("--config-file", type=str, default=None, envvar="CONFIG_FILE", help="Path to the config file")
 @asyncclick.option(
     "--tool-restrictions", type=str, default=None, envvar="TOOL_RESTRICTIONS", help="Comma-separated list of tool restrictions"
@@ -165,13 +164,14 @@ async def _execute_command(system_prompt: str, user_prompts: list[str], genai_cl
 @asyncclick.option(
     "--command-restrictions", type=str, default=None, envvar="COMMAND_RESTRICTIONS", help="Comma-separated list of command restrictions"
 )
-@asyncclick.option("--debug", is_flag=True, default=False, envvar="DEBUG", help="Enable debug mode")
+@asyncclick.option("--debug", is_flag=True, default=True, envvar="DEBUG", help="Enable debug mode")
 @asyncclick.option("--user-question", type=str, required=True, envvar="USER_QUESTION", help="The user's natural language question")
 async def cli(
     github_token: str,
     github_repo: str,
     github_repo_id: int,
     gemini_api_key: str,
+    thinking: bool,
     github_issue_number: int | None,
     github_pr_number: int | None,
     model: str,
@@ -216,7 +216,7 @@ async def cli(
         # mcp_servers, mcp_tools = await _initialize_mcp_servers(config_file)
         # tools.update(mcp_tools)
 
-        genai_client, genai_tools = await _initialize_genai_client(gemini_api_key, model)
+        genai_client, genai_tools = await _initialize_genai_client(gemini_api_key, model, thinking)
         tools.update(genai_tools)
 
         command = await _select_command(user_question, config.commands, genai_client)
@@ -224,7 +224,7 @@ async def cli(
         command_tools = [tools[tool] for tool in command.allowed_tools]
         command_tool_names = list(command.allowed_tools)
         command_tool_names.sort()
-        
+
         context = {}
         if github_issue_number:
             context["github_issue_number"] = github_issue_number

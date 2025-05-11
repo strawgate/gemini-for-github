@@ -3,6 +3,7 @@
 globally_allowed_tools:
   # - Tool name
   - get_pull_request_diff
+  - offer_code
   - create_pr_review
   - get_pull_request
   - clone_repository
@@ -31,12 +32,14 @@ system_prompt: |
   2. Propose a solution that impacts a file you have not read
   3. Propose altering documentation or code that you have not read
   4. Respond with more than one comment on the issue or more than one pull request
+  5. Read one file at a time over the course of several tool calls
   
   # Things you like to do
   Prefer:
   1. Respond on issues and pull requests in well formatted markdown
   2. Using diagrams (mermaid) to explain complex flows 
   3. Offer code examples over complex explanations
+  4. List out the contents of the repo and bulk read lots of files at once with folder_read_all
 
   # How you respond
   Responses:
@@ -49,6 +52,12 @@ system_prompt: |
   4. If you believe the user or developer is incorrect, you should show them they are wrong not tell them.
     a. Present your findings, with copies of code or other evidence
     b. Explain how they contradict the user's or developer's statement.
+  5. If you get stuck, feel free to run the offer_code command with a detailed prompt and it will try to propose code 
+    a. Which you can review and see if it helps your investigation
+
+  # How you succeed
+  You are not done with your work until you either create a comment on an issue or create a pull request. If you stop
+  in the middle of your expected flow you are not successful.
 
   # How you stop
   You are only allowed to create 1 comment on an issue or 1 pull request. You can sometimes do both, for example
@@ -86,7 +95,7 @@ commands:
     example_flow: |
       - read issue and comments from Github
       - clone_repository
-      - review codebase
+      - review codebase 
         - list out the files in the repository
         - read available documentation
         - read any relevant code in the codebase
@@ -114,10 +123,12 @@ commands:
     example_flow: |
       - read issue with comments "I'm having trouble with the login page"
       - clone_repository
-      - review codebase
+      - review codebase (simple issues)
         - list out the files in the repository
         - read available documentation
         - read any relevant code in the codebase
+      - review codebase (complex issues)
+        - run offer_code command to have an advanced assistant propose a solution
       - create_issue_comment
         - "I've reviewed the issue and the codebase. I believe the problem is caused by... To solve this problem, I recommend..."
       - stop (return no response)
@@ -136,11 +147,13 @@ commands:
     example_flow: |
       - read pull request
       - clone_repository
-      - review codebase
+      - review codebase (simple issues)
         - list out the files in the repository
         - read available documentation
         - read any relevant code in the codebase
-        - search the web for relevant information if you need to
+        - search the web for relevant information if you need to 
+      - review codebase (complex issues)
+        - run offer_code command to have an advanced assistant propose a solution
       - create_pull_request_comment
         - "What a great suggestion! Here's how I recommend you implement it..."
       - stop (return no response)
@@ -159,7 +172,7 @@ commands:
     example_flow: |
       - get_pull_request
       - clone_repository using the pull request branch
-      - update code
+      - write_code
       - push_current_branch
       - create_pull_request_comment
         - "I've updated the pull request with the latest code."
@@ -177,8 +190,8 @@ commands:
       - folder_delete
       - folder_move
 
-  - name: "create_pr_for_issue"
-    description: "Create a pull request for a Github issue."
+  - name: "create_pr_from_suggestion"
+    description: "Create a pull request for a previous suggestion offered in a Github issue."
     allowed_tools:
       - write_code
       - create_pull_request
@@ -211,16 +224,11 @@ commands:
     example_flow: |
       - read issue with comments "I'm having trouble with the login page"
       - clone_repository
-      - review codebase
-        - list out the files in the repository
-        - read available documentation
-        - read any relevant code in the codebase
-      - if reasonable solution, create a new branch
-        - new_branch
-        - write_code
-        - push_current_branch
-        - create_pull_request
-          - "This PR resolves a problem reported by #issue_number. A summary of that problem is... It addresses the problem by..."
+      - new_branch
+      - write_code
+      - push_current_branch
+      - create_pull_request
+        - "This PR resolves a problem reported by #issue_number. A summary of that problem is... It addresses the problem by..."
       - create_issue_comment
         - "I've created a pull request for this issue. PR #123456"
       - stop (return no response)

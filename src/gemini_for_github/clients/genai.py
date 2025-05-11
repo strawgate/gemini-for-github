@@ -16,6 +16,7 @@ from google.genai.types import (
     HarmBlockThreshold,
     HarmCategory,
     SafetySetting,
+    ThinkingConfig,
     ToolConfig,
     ToolListUnion,
 )
@@ -50,7 +51,7 @@ class GenAIClient:
 
     request_counter: int = 0
 
-    def __init__(self, api_key: str, model: str = "gemini-2.5-flash-preview-04-17", temperature: float = 0.2):
+    def __init__(self, api_key: str, model: str = "gemini-2.5-flash-preview-04-17", temperature: float = 0.2, thinking: bool = True):
         """Initialize the GenAI client.
 
         Args:
@@ -63,6 +64,7 @@ class GenAIClient:
 
         self.model: str = model
         self.temperature = temperature
+        self.thinking = thinking
 
     def _debug(self, msg: str):
         logger.debug(f"Request {self.request_counter}: {msg}")
@@ -79,7 +81,7 @@ class GenAIClient:
         system_prompt: str,
         user_prompts: ContentListUnion | ContentListUnionDict,
         tools: ToolListUnion,
-    ) -> dict[str, Any]:
+    ) -> str:
         """Generate content using the AI model.
 
         Args:
@@ -112,13 +114,16 @@ class GenAIClient:
 
         self.request_counter += 1
 
+        thinking_config = ThinkingConfig(thinking_budget=2048) if self.thinking else None
+
         generation_config = GenerateContentConfig(
             temperature=self.temperature,
             max_output_tokens=4096,
-            safety_settings=safety_settings,
+            #safety_settings=safety_settings,
             tools=tools,
             system_instruction=system_prompt,
-            #stop_sequences=["Stop."],
+            # stop_sequences=["Stop."],
+            thinking_config=thinking_config,
             tool_config=ToolConfig(
                 function_calling_config=FunctionCallingConfig(
                     # mode=FunctionCallingConfigMode.ANY,
@@ -140,7 +145,7 @@ class GenAIClient:
         if response.automatic_function_calling_history and len(response.automatic_function_calling_history) > 0:
             self._log_tool_calls(response.automatic_function_calling_history)
 
-        return {"text": response.text, "tool_calls": response.prompt_feedback}
+        return response.text
 
     def _log_tool_calls(self, calling_history: list[Content]):
         """

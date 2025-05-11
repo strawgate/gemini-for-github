@@ -6,7 +6,14 @@ from pathlib import Path
 
 from git import RemoteReference, Repo
 
-from gemini_for_github.errors.git import GitBranchExistsError, GitClientError, GitCloneError, GitConfigError, GitNewBranchError, GitPushError
+from gemini_for_github.errors.git import (
+    GitBranchExistsError,
+    GitClientError,
+    GitCloneError,
+    GitConfigError,
+    GitNewBranchError,
+    GitPushError,
+)
 from gemini_for_github.shared.logging import BASE_LOGGER
 
 logger = BASE_LOGGER.getChild("git")

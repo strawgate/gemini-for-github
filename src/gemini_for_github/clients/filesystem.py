@@ -5,12 +5,12 @@ This server provides tools for reading, creating, appending, erasing, moving,
 and deleting files, with centralized exception handling.
 """
 
-from collections.abc import Callable
 import os
-from pathlib import Path
 import shutil
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from fnmatch import fnmatch
+from pathlib import Path
 
 from fastmcp.contrib.mcp_mixin import MCPMixin
 from pydantic import BaseModel, Field
@@ -195,7 +195,7 @@ class FileOperations:
         async with handle_file_errors(file_path):
             with open(file_path, encoding="utf-8") as f:
                 content = f.read()
-        logger.info(f"File read successfully from {file_path}")
+        logger.info(f"File read successfully from {file_path}: {content[:100]}")
         return content
 
     async def create(self, file_path: str, content: str) -> bool:
@@ -436,7 +436,7 @@ class FolderOperations(MCPMixin):
             else:
                 contents = os.listdir(folder_path)
 
-            logger.info(f"Contents of {folder_path} listed successfully")
+            logger.info(f"Contents of {folder_path} listed successfully {len(contents)} files")
             return contents
 
     async def read_all(
@@ -501,12 +501,14 @@ class FolderOperations(MCPMixin):
                     errors.append(FileReadError(file_path=file, error=str(e)))
                     logger.error(f"Error reading file {file_path}: {e}")
 
-            return FileReadSummary(
+            summary = FileReadSummary(
                 total_files=len(files),
                 skipped_files=unfiltered_file_count - len(files),
                 errors=errors,
                 results=results,
             )
+            logger.info(f"File read summary: {summary}")
+            return summary
 
     async def move(self, source_path: str, destination_path: str) -> bool:
         """

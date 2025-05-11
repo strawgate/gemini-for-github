@@ -4,7 +4,7 @@ from typing import Any
 
 from github import Auth, Github
 from github.Repository import Repository
-from github.PullRequest import PullRequest
+
 from gemini_for_github.errors.github import (
     GithubClientCommentLimitError,
     GithubClientError,
@@ -235,7 +235,7 @@ class GitHubAPIClient:
             repository = self.github.get_repo(self.repo_id)
             issue = repository.get_issue(pull_number)
             issue.create_comment(body)
-            
+
         return True
 
     def create_pull_request(self, head_branch: str, base_branch: str, title: str, body: str) -> dict[str, Any]:

@@ -229,12 +229,10 @@ async def cli(
         genai_client, genai_tools = await _initialize_genai_client(gemini_api_key, model)
         tools.update(genai_tools)
 
-        # Filter commands based on activation keywords before selecting
-        if config.matches_activation_keyword(user_question, config.activation_keywords):
-            command = await _select_command(user_question, config.commands, genai_client)
-        else:
-            logger.info("No activation keyword found in user question. Skipping command selection.")
-            sys.exit(0)
+        # The activation keyword check was removed based on user feedback.
+        # The model is now expected to handle whether a command is appropriate
+        # based on the user's question and the available commands.
+        command = await _select_command(user_question, config.commands, genai_client)
 
         command_tools = [tools[tool] for tool in command.allowed_tools]
         command_tool_names = list(command.allowed_tools)

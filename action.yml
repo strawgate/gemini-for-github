@@ -10,14 +10,10 @@ inputs:
   github_token:
     description: "The GitHub token for authentication."
     required: true
-  github_owner:
-    description: "The GitHub repository owner."
+  github_repo_id:
+    description: "The GitHub repository ID."
     required: true
-    default: "${{ github.repository_owner }}"
-  github_repo:
-    description: "The GitHub repository name."
-    required: true
-    default: "${{ github.event.repository.name }}"
+    default: "${{ github.event.repository.id }}"
   github_issue_number:
     description: "The GitHub issue number (optional)."
     required: false
@@ -50,13 +46,6 @@ inputs:
     description: "The user's natural language question."
     required: true
 
-outputs:
-  # Define outputs if needed, based on the CLI tool's output
-  # For example, if the tool outputs a review result or a PR number
-  # review_result:
-  #   description: "The result of the code review."
-  #   value: ${{ steps.run_cli.outputs.review_result }}
-
 branding:
   icon: "code"
   color: "blue"
@@ -68,7 +57,7 @@ runs:
     GEMINI_API_KEY: ${{ inputs.gemini_api_key }}
     GITHUB_TOKEN: ${{ inputs.github_token }}
     GITHUB_OWNER: ${{ inputs.github_owner }}
-    GITHUB_REPO: ${{ inputs.github_repo }}
+    GITHUB_REPO_ID: ${{ inputs.github_repo_id }}
     GITHUB_ISSUE_NUMBER: ${{ inputs.github_issue_number }}
     GITHUB_PR_NUMBER: ${{ inputs.github_pr_number }}
     GEMINI_MODEL: ${{ inputs.model }}
@@ -78,6 +67,3 @@ runs:
     COMMAND_RESTRICTIONS: ${{ inputs.command_restrictions }}
     DEBUG: ${{ inputs.debug }}
     USER_QUESTION: ${{ inputs.user_question }}
-  args:
-    - "python"
-    - "src/gemini_for_github/main.py"

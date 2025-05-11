@@ -6,5 +6,9 @@ class MainError(Exception):
         super().__init__(self.message)
 
 
+class CommandNotSelectedError(MainError):
+    """Exception raised when a command is not selected."""
+
+
 class CommandNotFoundError(MainError):
     """Exception raised when a command is not found."""

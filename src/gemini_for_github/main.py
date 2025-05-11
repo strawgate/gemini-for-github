@@ -18,7 +18,7 @@ from gemini_for_github.clients.mcp import MCPServer
 from gemini_for_github.config.config import Command, Config, ConfigFile
 from gemini_for_github.errors.aider import AiderError
 from gemini_for_github.errors.filesystem import FilesystemError
-from gemini_for_github.errors.main import CommandNotFoundError
+from gemini_for_github.errors.main import CommandNotFoundError, CommandNotSelectedError
 from gemini_for_github.errors.mcp import MCPServerError
 from gemini_for_github.shared.logging import BASE_LOGGER
 
@@ -34,8 +34,8 @@ async def _load_config(config_file_path: str, tool_restrictions: str | None) -> 
     return config, config_file
 
 
-async def _initialize_github_client(github_token: str, github_owner: str, github_repo: str) -> tuple[GitHubAPIClient, dict[str, Callable]]:
-    github_client = GitHubAPIClient(token=github_token, owner=github_owner, repo=github_repo)
+async def _initialize_github_client(github_token: str, github_repo_id: int) -> tuple[GitHubAPIClient, dict[str, Callable]]:
+    github_client = GitHubAPIClient(token=github_token, repo_id=github_repo_id)
     return github_client, github_client.get_tools()
 
 
@@ -89,10 +89,16 @@ async def _select_command(user_question: str, commands: list[Command], genai_cli
     User Request: **{user_question}**
     """
 
-    logger.info("Calling GenAI for command selection...")
+    logger.info(f"Calling Gemini for command selection... of {user_question}")
 
     command_selection_response = await genai_client.generate_content(system_prompt, [user_prompt], tools=[])
-    selected_command_name = command_selection_response.get("text", "").strip()
+    selected_command_name = command_selection_response.get("text", "")
+
+    if not selected_command_name:
+        msg = f"Gemini did not select a command for {user_question}"
+        raise CommandNotSelectedError(msg)
+
+    selected_command_name = selected_command_name.strip()
 
     logger.info(f"Model selected command: {selected_command_name}")
 
@@ -119,14 +125,13 @@ async def _execute_command(system_prompt: str, user_prompts: list[str], genai_cl
     """Executes the selected command."""
 
     logger.info("Calling Gemini for prompt execution")
-    final_response = await genai_client.generate_content(system_prompt, user_prompts, tools=tools) # type: ignore
-    logger.info("Gemini believes ithas completed the task.")
+    final_response = await genai_client.generate_content(system_prompt, user_prompts, tools=tools)  # type: ignore
+    logger.info("Gemini believes it has completed the task.")
 
 
 @asyncclick.command()
 @asyncclick.option("--github-token", type=str, required=True, envvar="GITHUB_TOKEN", help="GitHub API token")
-@asyncclick.option("--github-owner", type=str, required=True, envvar="GITHUB_OWNER", help="GitHub repository owner")
-@asyncclick.option("--github-repo", type=str, required=True, envvar="GITHUB_REPO", help="GitHub repository name")
+@asyncclick.option("--github-repo-id", type=int, required=True, envvar="GITHUB_REPO_ID", help="GitHub repository ID")
 @asyncclick.option("--gemini-api-key", type=str, required=True, envvar="GEMINI_API_KEY", help="Gemini API key")
 @asyncclick.option("--github-issue-number", type=int, envvar="GITHUB_ISSUE_NUMBER", default=None, help="GitHub issue number")
 @asyncclick.option("--github-pr-number", type=int, envvar="GITHUB_PR_NUMBER", default=None, help="GitHub pull request number")
@@ -149,8 +154,7 @@ async def _execute_command(system_prompt: str, user_prompts: list[str], genai_cl
 @asyncclick.option("--user-question", type=str, required=True, envvar="USER_QUESTION", help="The user's natural language question")
 async def cli(
     github_token: str,
-    github_owner: str,
-    github_repo: str,
+    github_repo_id: int,
     gemini_api_key: str,
     github_issue_number: int | None,
     github_pr_number: int | None,
@@ -168,13 +172,14 @@ async def cli(
         if debug:
             BASE_LOGGER.setLevel(logging.DEBUG)
 
-        config_path = config_file if config_file else "./src/gemini_for_github/config/default.yaml"
-        config, _ = await _load_config(config_path, tool_restrictions)
+        script_dir = Path(__file__).parent
+        config_path = config_file if config_file else script_dir / "config" / "default.yaml"
+        config, _ = await _load_config(str(config_path), tool_restrictions)
 
         allowed_commands = await _get_allowed_commands(config, command_restrictions)
 
         tools = {}
-        github_client, github_tools = await _initialize_github_client(github_token, github_owner, github_repo)
+        github_client, github_tools = await _initialize_github_client(github_token, github_repo_id)
         tools.update(github_tools)
 
         git_client, git_tools = await _initialize_git_client(root_path)
@@ -186,8 +191,8 @@ async def cli(
         aider_client, aider_tools = await _initialize_aider_client(root_path, model)
         tools.update(aider_tools)
 
-        #mcp_servers, mcp_tools = await _initialize_mcp_servers(config_file)
-        #tools.update(mcp_tools)
+        # mcp_servers, mcp_tools = await _initialize_mcp_servers(config_file)
+        # tools.update(mcp_tools)
 
         genai_client = await _initialize_genai_client(gemini_api_key, model)
 

@@ -121,6 +121,7 @@ class Command(BaseModel):
             example_flow=config_file_command_entry.example_flow,
         )
 
+
 class MCPServerConfiguration(BaseModel):
     name: str = Field(..., description="The name of the MCP server.")
     command: str = Field(..., description="The command to start the MCP server.")
@@ -131,6 +132,7 @@ class MCPServerConfiguration(BaseModel):
     @classmethod
     def from_config_file_mcp_server_entry(cls, config_file_mcp_server_entry: ConfigFileMCPServerEntry) -> Self:
         return cls(**config_file_mcp_server_entry.model_dump())
+
 
 class Config(BaseModel):
     activation_keywords: list[str] = Field(..., description="The list of activation keywords to enable Gemini for GitHub.")

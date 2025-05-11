@@ -3,8 +3,9 @@ from typing import Any
 from google.genai.client import AsyncClient, Client
 from google.genai.types import (
     Content,
+    ContentListUnion,
+    ContentListUnionDict,
     FunctionCallingConfig,
-    FunctionCallingConfigMode,
     GenerateContentConfig,
     GenerateContentResponse,
     HarmBlockThreshold,
@@ -12,8 +13,6 @@ from google.genai.types import (
     SafetySetting,
     ToolConfig,
     ToolListUnion,
-    ContentListUnion,
-    ContentListUnionDict,
 )
 
 from gemini_for_github.shared.logging import BASE_LOGGER
@@ -26,9 +25,7 @@ class GenAIClient:
 
     request_counter: int = 0
 
-    def __init__(
-        self, api_key: str, model: str = "gemini-2.5-flash-preview-04-17", temperature: float = 0.2
-    ):
+    def __init__(self, api_key: str, model: str = "gemini-2.5-flash-preview-04-17", temperature: float = 0.2):
         """Initialize the GenAI client.
 
         Args:
@@ -92,7 +89,7 @@ class GenAIClient:
             stop_sequences=["Stop."],
             tool_config=ToolConfig(
                 function_calling_config=FunctionCallingConfig(
-                    #mode=FunctionCallingConfigMode.ANY,
+                    # mode=FunctionCallingConfigMode.ANY,
                 )
             ),
         )

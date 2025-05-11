@@ -1,6 +1,7 @@
+from collections.abc import Callable
 from fnmatch import fnmatch
 from pathlib import Path
-from typing import Callable, Union
+from typing import Union
 
 from pydantic import BaseModel
 
@@ -8,6 +9,7 @@ from gemini_for_github.errors.filesystem import FilesystemNotFoundError, Filesys
 from gemini_for_github.shared.logging import BASE_LOGGER
 
 logger = BASE_LOGGER.getChild("filesystem")
+
 
 class DirectoryInfo(BaseModel):
     path: str
@@ -91,12 +93,14 @@ class FilesystemClient:
         Returns:
             The directory info for the given relative path.
         """
-        logger.info(f"Getting directory info for {relative_path} with levels {levels}, exclude_hidden {exclude_hidden}, exclude_globs {exclude_globs}, include_globs {include_globs}")
+        logger.info(
+            f"Getting directory info for {relative_path} with levels {levels}, exclude_hidden {exclude_hidden}, exclude_globs {exclude_globs}, include_globs {include_globs}"
+        )
         p = Path(relative_path)
         if not p.is_dir():
             msg = f"Directory {relative_path} is not a directory"
             raise FilesystemNotFoundError(msg)
-        
+
         if not p.is_relative_to(self.root):
             msg = f"Directory {relative_path} is not a child of the root directory"
             raise FilesystemOutsideRootError(msg)

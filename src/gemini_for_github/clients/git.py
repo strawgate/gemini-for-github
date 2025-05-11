@@ -56,7 +56,6 @@ class GitClient:
             logger.exception(msg)
             raise GitNewBranchError(msg) from e
 
-
     def push_current_branch(self):
         """
         Pushes the current branch to the origin.

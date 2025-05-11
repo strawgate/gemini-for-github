@@ -2,6 +2,7 @@ from collections.abc import Callable
 from typing import Any
 
 from github import Auth, Github
+from github.Repository import Repository
 
 from gemini_for_github.errors.github import (
     GithubClientCommentLimitError,
@@ -13,6 +14,7 @@ from gemini_for_github.errors.github import (
     GithubClientPRLimitError,
     GithubClientPRReviewCreateError,
     GithubClientPRReviewLimitError,
+    GithubClientRepositoryGetError,
 )
 from gemini_for_github.shared.logging import BASE_LOGGER
 
@@ -22,7 +24,7 @@ logger = BASE_LOGGER.getChild("github")
 class GitHubAPIClient:
     """Concrete implementation of GitHub API client using PyGithub."""
 
-    def __init__(self, token: str, owner: str, repo: str):
+    def __init__(self, token: str, repo_id: int):
         """Initialize the GitHub API client.
 
         Args:
@@ -30,13 +32,22 @@ class GitHubAPIClient:
         """
         auth = Auth.Token(token)
         self.github = Github(auth=auth)
-        self.owner = owner
-        self.repo = repo
+        self.repo_id: int = repo_id
 
         self.issue_comment_counter: int = 0
         self.pr_create_counter: int = 0
         self.pr_review_counter: int = 0
         self.issue_create_counter: int = 0
+
+    def get_repository(self) -> Repository:
+        """Get the repository."""
+        logger.info(f"Getting repository {self.repo_id}")
+        try:
+            return self.github.get_repo(self.repo_id)
+        except Exception as e:
+            msg = f"Error getting repository: {e}"
+            logger.exception(msg)
+            raise GithubClientRepositoryGetError(msg) from e
 
     def get_tools(self) -> dict[str, Callable]:
         """Get the tools available to the GitHub API client."""
@@ -62,7 +73,7 @@ class GitHubAPIClient:
         """
         logger.info(f"Getting pull request diff for GitHub PR {pull_number}")
         try:
-            repository = self.github.get_repo(f"{self.owner}/{self.repo}")
+            repository = self.github.get_repo(self.repo_id)
             pull_request = repository.get_pull(pull_number)
             files = pull_request.get_files()
 
@@ -70,16 +81,13 @@ class GitHubAPIClient:
             msg = f"Error getting pull request diff: {e}"
             logger.exception(msg)
             raise GithubClientPRDiffGetError(msg) from e
-        
-        return "\n".join(file.patch for file in files)
 
+        return "\n".join(file.patch for file in files)
 
     def create_pr_review(self, pull_number: int, body: str, event: str = "COMMENT") -> str:
         """Create a review on a pull request.
 
         Args:
-            owner: Repository owner
-            repo: Repository name
             pull_number: Pull request number
             body: Review body text
             event: Review event type (e.g., "COMMENT", "APPROVE", "REQUEST_CHANGES")
@@ -89,31 +97,27 @@ class GitHubAPIClient:
         """
         logger.info(f"Creating pull request review for GitHub PR {pull_number}")
         if self.pr_review_counter == 1:
-            msg = "The model attempted to create more than one pull request review. The model is only allowed to create one pull request review per pull request. Stop."
+            msg = "The model attempted to create more than one pull request review but only one is allowed. Stop."
             raise GithubClientPRReviewLimitError(msg)
-        
+
         self.pr_review_counter += 1
 
         try:
-            repository = self.github.get_repo(f"{self.owner}/{self.repo}")
+            repository = self.github.get_repo(self.repo_id)
             pull_request = repository.get_pull(pull_number)
             review = pull_request.create_review(body=body, event=event)
-            
-            
+
         except Exception as e:
             msg = f"Error creating pull request review: {e}"
             logger.exception(msg)
             raise GithubClientPRReviewCreateError(msg) from e
-        
-        return f"Created review on GitHub PR {pull_number} with id {review.id}"
 
+        return f"Created review on GitHub PR {pull_number} with id {review.id}"
 
     def get_issue_body(self, issue_number: int) -> str:
         """Get the body of an issue.
 
         Args:
-            owner: Repository owner
-            repo: Repository name
             issue_number: Issue number
 
         Returns:
@@ -121,7 +125,7 @@ class GitHubAPIClient:
         """
         logger.info(f"Getting issue body for GitHub issue {issue_number}")
         try:
-            repository = self.github.get_repo(f"{self.owner}/{self.repo}")
+            repository = self.github.get_repo(self.repo_id)
             issue = repository.get_issue(issue_number)
             response = f"# {issue.title}\n\n{issue.body}"
             logger.debug(f"Issue body for issue {issue_number}: {response.strip()}")
@@ -130,7 +134,6 @@ class GitHubAPIClient:
             msg = f"Error getting issue body: {e}"
             logger.exception(msg)
             raise GithubClientIssueBodyGetError(msg) from e
-
 
     def get_issue_comments(self, issue_number: int) -> list[dict[str, Any]]:
         """Get all comments on an issue.
@@ -143,14 +146,13 @@ class GitHubAPIClient:
         """
         logger.info(f"Getting issue comments for GitHub issue {issue_number}")
         try:
-            repository = self.github.get_repo(f"{self.owner}/{self.repo}")
+            repository = self.github.get_repo(self.repo_id)
             issue = repository.get_issue(issue_number)
             response = [comment.raw_data for comment in issue.get_comments()]
         except Exception as e:
             msg = f"Error getting issue comments: {e}"
             logger.exception(msg)
             raise GithubClientIssueCommentsGetError(msg) from e
-        
 
         logger.debug(f"Comments from issue {issue_number}: {response}")
         return response
@@ -169,14 +171,14 @@ class GitHubAPIClient:
         body_suffix = "\n\nThis is an automated response generated by a GitHub Action."
 
         if self.issue_comment_counter == 1:
-            msg = "The model attempted to create more than one comment. The model is only allowed to create one comment per issue. Stop."
+            msg = "The model attempted to create more than one comment but only one is allowed. Stop."
             logger.error(msg)
             raise GithubClientCommentLimitError(msg)
 
         self.issue_comment_counter += 1
 
         try:
-            repository = self.github.get_repo(f"{self.owner}/{self.repo}")
+            repository = self.github.get_repo(self.repo_id)
             issue = repository.get_issue(issue_number)
             comment = issue.create_comment(body + body_suffix)
         except Exception as e:
@@ -200,15 +202,17 @@ class GitHubAPIClient:
         """
         logger.info(f"Creating pull request for GitHub branch {head_branch} into {base_branch} with title {title}")
         if self.pr_create_counter == 1:
-            msg = "The model attempted to create more than one pull request. The model is only allowed to create one pull request per issue. Stop."
+            msg = "The model attempted to create more than one pull request but only one is allowed. Stop."
             raise GithubClientPRLimitError(msg)
 
         try:
-            repository = self.github.get_repo(f"{self.owner}/{self.repo}")
+            repository = self.github.get_repo(self.repo_id)
             pull_request = repository.create_pull(title=title, body=body, head=head_branch, base=base_branch)
             self.pr_create_counter += 1
-            return pull_request.raw_data
+
         except Exception as e:
             msg = f"Error creating pull request: {e}"
             logger.exception(msg)
             raise GithubClientPRCreateError(msg) from e
+
+        return pull_request.raw_data

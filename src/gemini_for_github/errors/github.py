@@ -43,3 +43,7 @@ class GithubClientPRReviewCreateError(GithubClientError):
 
 class GithubClientPRDiffGetError(GithubClientError):
     """Error raised when a PR diff cannot be retrieved."""
+
+
+class GithubClientRepositoryGetError(GithubClientError):
+    """Error raised when a repository cannot be retrieved."""

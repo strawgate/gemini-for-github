@@ -4,7 +4,7 @@ from pathlib import Path
 from aider.coders import Coder
 from aider.io import InputOutput
 from aider.models import Model
-
+from aider.repo import GitRepo
 from gemini_for_github.errors.aider import AiderError, AiderNoneResultError
 from gemini_for_github.shared.logging import BASE_LOGGER
 
@@ -24,16 +24,9 @@ class AiderClient:
             root: The root directory for Aider's operations.
             model: The specific Gemini model string to be used by Aider (e.g., "gemini/gemini-2.5-flash-preview-04-17").
         """
-        self.root = root
-
-        io = InputOutput(yes=True, root=str(self.root))
         self.model = Model(f"gemini/{model}")
-        self.coder: Coder = Coder.create(
-            main_model=self.model,
-            io=io,
-        )
-        self.coder.verbose = True
-        
+
+        self.root = root
 
     def get_tools(self) -> dict[str, Callable]:
         """Get the tools available to the Aider client."""
@@ -51,6 +44,18 @@ class AiderClient:
         Returns:
             A string containing the results of the Aider execution.
         """
+
+        io = InputOutput(yes=True)
+
+        repo = GitRepo(io, [], str(self.root), models=[self.model])
+        self.coder: Coder = Coder.create(
+            main_model=self.model,
+            io=io,
+            repo=repo,
+        )
+        self.coder.verbose = True
+
+
         logger.info(f"Invoking Aider in {self.root}, cwd: {Path.cwd()} with prompt: {prompt[:100]}...")
 
         try:

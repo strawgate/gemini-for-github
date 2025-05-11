@@ -18,7 +18,9 @@ from google.genai.types import (
     SafetySetting,
     ThinkingConfig,
     ToolConfig,
+    Part,
     ToolListUnion,
+    Candidate
 )
 
 from gemini_for_github.shared.logging import BASE_LOGGER
@@ -79,8 +81,9 @@ class GenAIClient:
     async def generate_content(
         self,
         system_prompt: str,
-        user_prompts: ContentListUnion | ContentListUnionDict,
+        user_prompts: list[str],
         tools: ToolListUnion,
+        check_completion: bool = False
     ) -> str:
         """Generate content using the AI model.
 
@@ -131,21 +134,54 @@ class GenAIClient:
             ),
         )
 
+        
+
         # self._debug(f"Generation config: {generation_config}")
         self._debug(f"User prompts: {user_prompts}")
 
+        content_list: list[Content] = [
+            Content(role="user", parts=[Part(text=user_prompt)])
+            for user_prompt in user_prompts
+        ]
+
         response: GenerateContentResponse = await self.client.models.generate_content(
             model=self.model,
-            contents=user_prompts,
+            contents=content_list,
             config=generation_config,
         )
 
         self._debug(f"Model response: {response.text}")
 
+        if check_completion:
+
+            if response.candidates and len(response.candidates) > 0:
+                candidate: Candidate = response.candidates[0]
+                if content := candidate.content:
+                    content_list.append(content)
+
+            if response.automatic_function_calling_history and len(response.automatic_function_calling_history) > 0:
+                for tool_call in response.automatic_function_calling_history:
+                    content_list.append(tool_call)
+    
+
+            content_list.append(Content(role="model", parts=[
+                Part(
+                    text="I will now double check I have completed my task. I will now answer two simple questions. Was I asked to comment on an issue or make a pull request? Did I comment on an issue or make a pull request? If not, I will do so now.")
+            ]))
+
+            logger.info("Asking Gemini if it thinks it completed its work.")
+            response: GenerateContentResponse = await self.client.models.generate_content(
+                model=self.model,
+                contents=content_list,
+                config=generation_config,
+            )
+
+            logger.info(f"Gemini says: {response.text}")
+
         if response.automatic_function_calling_history and len(response.automatic_function_calling_history) > 0:
             self._log_tool_calls(response.automatic_function_calling_history)
 
-        return response.text
+        return response.text or ""
 
     def _log_tool_calls(self, calling_history: list[Content]):
         """

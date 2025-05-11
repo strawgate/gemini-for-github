@@ -144,7 +144,7 @@ async def _execute_command(system_prompt: str, user_prompts: list[str], genai_cl
     """Executes the selected command."""
 
     logger.info("Calling Gemini for prompt execution")
-    final_response = await genai_client.generate_content(system_prompt, user_prompts, tools=tools)  # type: ignore
+    final_response = await genai_client.generate_content(system_prompt, user_prompts, tools=tools, check_completion=True)  # type: ignore
     logger.info(f"Gemini believes it has completed the task: {final_response}")
 
 
@@ -164,7 +164,7 @@ async def _execute_command(system_prompt: str, user_prompts: list[str], genai_cl
 @asyncclick.option(
     "--command-restrictions", type=str, default=None, envvar="COMMAND_RESTRICTIONS", help="Comma-separated list of command restrictions"
 )
-@asyncclick.option("--debug", is_flag=True, default=True, envvar="DEBUG", help="Enable debug mode")
+@asyncclick.option("--debug", is_flag=True, default=False, envvar="DEBUG", help="Enable debug mode")
 @asyncclick.option("--user-question", type=str, required=True, envvar="USER_QUESTION", help="The user's natural language question")
 async def cli(
     github_token: str,

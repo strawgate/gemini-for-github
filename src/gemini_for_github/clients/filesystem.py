@@ -157,7 +157,7 @@ class FilesystemClient:
 
     def get_directory_info(
         self,
-        relative_path: str,
+        relative_path: str = ".",
         levels: int = 1,
         exclude_hidden: bool = True,
         exclude_globs: Union[list[str], None] = None,  # noqa: UP007

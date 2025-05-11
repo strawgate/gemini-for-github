@@ -88,6 +88,7 @@ class GitHubAPIClient:
             "create_issue_comment": self.create_issue_comment,
             "create_pull_request": self.create_pull_request,
             "create_pull_request_comment": self.create_pull_request_comment,
+            "search_issues": self.search_issues,
         }
 
     def get_pull_request(self, pull_number: int) -> dict[str, Any]:
@@ -235,8 +236,26 @@ class GitHubAPIClient:
             repository = self.github.get_repo(self.repo_id)
             issue = repository.get_issue(pull_number)
             issue.create_comment(body)
-            
+
         return True
+
+    def search_issues(self, query: str) -> list[dict[str, Any]]:
+        """Searches for issues in the repository.
+
+        Args:
+            query: The search query string.
+
+        Returns:
+            A list of dictionaries containing information about the found issues.
+        """
+        with self.error_handler("searching issues", f"query: {query}", GithubClientIssueSearchError):
+            # PyGithub's search_issues method searches across all repositories the authenticated user has access to
+            # To search within a specific repository, we need to include the repo in the query string
+            repo = self.github.get_repo(self.repo_id)
+            search_query = f"{query} repo:{repo.owner.login}/{repo.name}"
+            issues = self.github.search_issues(query=search_query)
+            # Convert the PaginatedList of Issues to a list of dictionaries
+            return [issue.raw_data for issue in issues]
 
     def create_pull_request(self, head_branch: str, base_branch: str, title: str, body: str) -> dict[str, Any]:
         """Create a pull request using PyGithub.

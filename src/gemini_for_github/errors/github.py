@@ -62,3 +62,7 @@ class GithubClientPRGetError(GithubClientError):
 
 class GithubClientPRCommentCreateError(GithubClientError):
     """Error raised when a PR comment cannot be created."""
+
+
+class GithubClientIssueSearchError(GithubClientError):
+    """Error raised when searching for issues fails."""

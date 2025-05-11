@@ -1,5 +1,6 @@
 from collections.abc import Callable
 
+from gemini_for_github.errors.git import GitBranchExistsError
 from git import Remote, RemoteReference, Repo
 
 from gemini_for_github.shared.logging import BASE_LOGGER
@@ -28,6 +29,14 @@ class GitClient:
         """
         Creates a new branch with the given name.
         """
+        logger.info(f"Creating new branch: {name}")
+
+        # check if branch already exists
+        if name in self.repo.heads:
+            msg = f"Branch {name} already exists"
+            logger.info(msg)
+            raise GitBranchExistsError(msg)
+
         self.repo.head.reference = self.repo.create_head(name)
         rem_ref = RemoteReference(self.repo, f"refs/remotes/{self.origin.name}/{name}")
         self.repo.head.reference.set_tracking_branch(rem_ref)
@@ -37,4 +46,5 @@ class GitClient:
         """
         Pushes the given branch to the origin.
         """
+        logger.info("Pushing branch to origin")
         self.origin.push()

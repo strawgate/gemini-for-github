@@ -38,6 +38,7 @@ class FilesystemClient:
         }
 
     def get_file_info(self, path: str) -> FileInfo:
+        logger.info(f"Getting file info for {path}")
         p = Path(path)
 
         if not p.is_file():
@@ -59,6 +60,7 @@ class FilesystemClient:
         )
 
     def get_file_content(self, path: str) -> str:
+        logger.info(f"Getting file content for {path}")
         try:
             p = Path(path)
             return p.read_text()
@@ -77,6 +79,7 @@ class FilesystemClient:
         exclude_globs: Union[list[str], None] = None,  # noqa: UP007
         include_globs: Union[list[str], None] = None,  # noqa: UP007
     ) -> DirectoryInfo:
+        logger.info(f"Getting directory info for {path} with levels {levels}, exclude_hidden {exclude_hidden}, exclude_globs {exclude_globs}, include_globs {include_globs}")
         p = Path(path)
         if not p.is_dir():
             msg = f"Directory {path} is not a directory"

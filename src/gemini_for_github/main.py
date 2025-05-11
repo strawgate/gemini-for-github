@@ -52,11 +52,11 @@ async def _initialize_github_client(github_token: str, github_repo_id: int) -> t
     return github_client, github_client.get_tools()
 
 
-async def _initialize_git_client(repo_path: Path) -> tuple[GitClient, dict[str, Callable]]:
+async def _initialize_git_client(repo_dir: Path, github_token: str, owner_repo: str) -> tuple[GitClient, dict[str, Callable]]:
     """Initializes and returns the Git client and its tools using the given repository path."""
     # TODO: The 'github_repo' parameter is currently unused by the GitClient constructor.
     # Investigate if it's needed or can be removed.
-    git_client = GitClient(repo_path=str(repo_path))
+    git_client = GitClient(repo_dir=str(repo_dir), github_token=github_token, owner_repo=owner_repo)
     return git_client, git_client.get_tools()
 
 
@@ -209,7 +209,9 @@ async def cli(
         github_client, github_tools = await _initialize_github_client(github_token, github_repo_id)
         tools.update(github_tools)
 
-        git_client, git_tools = await _initialize_git_client(root_path)
+        repo_dir = root_path / "repo"
+
+        git_client, git_tools = await _initialize_git_client(repo_dir, github_token, github_repo)
         tools.update(git_tools)
 
         filesystem_client, filesystem_tools = await _initialize_filesystem_client(root_path)

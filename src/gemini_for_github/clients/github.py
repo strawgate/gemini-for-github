@@ -138,6 +138,7 @@ class GitHubAPIClient:
             logger.exception(msg)
             raise GithubClientIssueBodyGetError(msg) from e
 
+
     def get_issue_comments(self, issue_number: int) -> list[dict[str, Any]]:
         """Get all comments on an issue.
 

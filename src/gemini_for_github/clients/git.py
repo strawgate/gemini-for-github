@@ -1,4 +1,5 @@
 from collections.abc import Callable
+import os
 
 from git import Remote, RemoteReference, Repo
 
@@ -10,19 +11,18 @@ logger = BASE_LOGGER.getChild("git")
 
 class GitClient:
     """
-    A client for interacting with Git repositories using the `gitpython` library.
-    It handles operations like creating branches and pushing changes.
+    A client to invoke Git for code modifications.
     """
 
-    def __init__(self, repo_path: str = "."):
-        """Initializes the GitClient.
+    def __init__(self, repo_dir, github_token: str, owner_repo: str):
+        self.repo_dir = repo_dir
+        self.repo_url = f"https://{github_token}@github.com/{owner_repo}.git"
 
-        Args:
-            repo_path: The file system path to the Git repository. Defaults to the current directory.
+    def set_safe_directory(self):
         """
-        self.repo: Repo = Repo(repo_path)
-        self.origin: Remote = self.repo.remotes.origin
-        self.starting_branch: str = self.repo.active_branch.name
+        Set the safe directory for the Git client.
+        """
+        self.repo.git.config("safe.directory", "*")
 
     def get_tools(self) -> dict[str, Callable]:
         """Get the tools available to the Git client."""
@@ -31,12 +31,17 @@ class GitClient:
             "push_current_branch": self.push_current_branch,
         }
 
-    def return_to_starting_branch(self):
+
+    def clone(self, branch: str = "main"):
         """
-        Returns to the starting branch.
+        Clones a repository from a given URL.
         """
-        logger.info(f"Returning to starting branch: {self.starting_branch}")
-        self.repo.head.reference = self.repo.create_head(self.starting_branch)
+        logger.info(f"Cloning repository from {self.repo_url} to {self.repo_dir}")
+        self.repo = Repo.clone_from(self.repo_url, self.repo_dir, branch=branch)
+        self.origin = self.repo.remotes.origin
+
+        logger.info(f"Changing directory to {self.repo_dir}")
+        os.chdir(self.repo_dir)
 
     def new_branch(self, name: str):
         """

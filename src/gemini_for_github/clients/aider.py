@@ -7,6 +7,7 @@ from aider.models import Model
 from aider.repo import GitRepo
 from gemini_for_github.errors.aider import AiderError, AiderNoneResultError
 from gemini_for_github.shared.logging import BASE_LOGGER
+import gemini_for_github.prompts as prompts
 
 logger = BASE_LOGGER.getChild("aider")
 
@@ -56,10 +57,12 @@ class AiderClient:
         self.coder.verbose = True
 
 
-        logger.info(f"Invoking Aider in {self.root}, cwd: {Path.cwd()} with prompt: {prompt[:100]}...")
+        full_prompt = prompts.AIDER_PLAN_INSTRUCTION + "\n\n" + prompt
+
+        logger.info(f"Invoking Aider in {self.root}, cwd: {Path.cwd()} with prompt: {full_prompt[:100]}...")
 
         try:
-            result = self.coder.run(with_message=prompt)
+            result = self.coder.run(with_message=full_prompt)
             if commit_when_done:
                 result = self.coder.run(with_message="/commit")
         except Exception as e:

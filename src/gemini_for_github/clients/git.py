@@ -29,10 +29,11 @@ class GitClient:
         return {
             "new_branch": self.new_branch,
             "push_current_branch": self.push_current_branch,
+            "clone_repository": self.clone_repository,
         }
 
 
-    def clone(self, branch: str = "main"):
+    def clone_repository(self, branch: str = "main"):
         """
         Clones a repository from a given URL.
         """

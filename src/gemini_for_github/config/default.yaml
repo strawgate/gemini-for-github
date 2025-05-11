@@ -10,6 +10,7 @@ globally_allowed_tools:
   # - Tool name
   - get_pull_request_diff
   - create_pr_review
+  - clone_repository
   - get_issue_body
   - get_issue_comments
   - create_issue_comment

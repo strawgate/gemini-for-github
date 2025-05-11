@@ -157,3 +157,17 @@ commands:
       - create_issue_comment
         - "I've created a pull request for this issue. PR #123456"
       - stop (return no response)
+  - name: "kindly_reject_the_user_request"
+    description: "A developer has specifically asked you to kindly reject the user's request."
+    prompt: |
+      You are being asked to kindly reject the user's request. You should respond with a polite and friendly message.
+      You should use a lot of emojis to make the message more friendly. You are the mouthpiece for the developer and 
+      you want to make sure the user knows that we appreciate their request but we have chosen to not implement it.
+
+      On GitHub issue number: $github_issue_number -- the developer has asked: $user_question
+    example_flow: |
+      - read issue "I'm having trouble with the login page"
+      - read comments on the issue
+      - create_issue_comment
+        - "Thanks so much for you're request :) We're not..."
+      - stop (return no response)

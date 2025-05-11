@@ -3,7 +3,7 @@ import os
 
 from git import Remote, RemoteReference, Repo
 
-from gemini_for_github.errors.git import GitBranchExistsError, GitNewBranchError, GitPushError
+from gemini_for_github.errors.git import GitBranchExistsError, GitCloneError, GitNewBranchError, GitPushError
 from gemini_for_github.shared.logging import BASE_LOGGER
 
 logger = BASE_LOGGER.getChild("git")
@@ -38,11 +38,16 @@ class GitClient:
         Clones a repository from a given URL.
         """
         logger.info(f"Cloning repository from {self.repo_url} to {self.repo_dir}")
-        self.repo = Repo.clone_from(self.repo_url, self.repo_dir, branch=branch)
-        self.origin = self.repo.remotes.origin
 
-        logger.info(f"Changing directory to {self.repo_dir}")
-        os.chdir(self.repo_dir)
+        try:
+            self.repo = Repo.clone_from(self.repo_url, self.repo_dir, branch=branch)
+            self.origin = self.repo.remotes.origin
+            os.chdir(self.repo_dir)
+            logger.info(f"Changing directory to {self.repo_dir}")
+        except Exception as e:
+            msg = f"Error cloning repository: {e}"
+            logger.exception(msg)
+            raise GitCloneError(msg) from e
 
     def new_branch(self, name: str):
         """

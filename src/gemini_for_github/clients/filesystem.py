@@ -125,17 +125,24 @@ class FilesystemClient:
             rendered_path = self._get_rendered_path(self.root, p)
             rendered_relative_path = rendered_path.relative_to(self.root)
 
+
+            logger.info(f"Rendered path: {rendered_path}")
+
             if not rendered_path.is_dir():
                 msg = f"Directory {relative_path} is not a directory"
                 raise FilesystemNotFoundError(msg)
 
             children = [child for child in rendered_path.iterdir() if not child.name.startswith(".")] if exclude_hidden else list(rendered_path.iterdir())
 
+            logger.info(f"Children: {children}")
+
             if exclude_globs:
                 children = [child for child in children if not any(fnmatch(child.name, glob) for glob in exclude_globs)]
 
             if include_globs:
                 children = [child for child in children if any(fnmatch(child.name, glob) for glob in include_globs)]
+
+            logger.info(f"Children after exclude_globs and include_globs: {children}")
 
             children_count = len(children)
 

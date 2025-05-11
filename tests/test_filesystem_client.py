@@ -95,3 +95,51 @@ def test_get_directory_info_hidden_folders(temp_filesystem_client, tmp_path):
     # Test with exclude_hidden=False
     dir_info_included = temp_filesystem_client.get_directory_info(str(tmp_path), exclude_hidden=False)
     assert any(child.name == ".hidden_dir" for child in dir_info_included.children)
+
+def test_get_directory_info_include_globs(temp_filesystem_client, tmp_path):
+    """Test get_directory_info with include_globs."""
+    # Create files with different extensions
+    (tmp_path / "file1.txt").write_text("content")
+    (tmp_path / "file2.log").write_text("content")
+    (tmp_path / "file3.txt").write_text("content")
+
+    # Test with include_globs
+    include_globs = ["*.txt"]
+    dir_info = temp_filesystem_client.get_directory_info(str(tmp_path), include_globs=include_globs)
+    children_names = [child.name for child in dir_info.children]
+    assert "file1.txt" in children_names
+    assert "file3.txt" in children_names
+    assert "file2.log" not in children_names
+
+def test_get_directory_info_exclude_globs(temp_filesystem_client, tmp_path):
+    """Test get_directory_info with exclude_globs."""
+    # Create files with different extensions
+    (tmp_path / "file1.txt").write_text("content")
+    (tmp_path / "file2.log").write_text("content")
+    (tmp_path / "file3.txt").write_text("content")
+
+    # Test with exclude_globs
+    exclude_globs = ["*.log"]
+    dir_info = temp_filesystem_client.get_directory_info(str(tmp_path), exclude_globs=exclude_globs)
+    children_names = [child.name for child in dir_info.children]
+    assert "file1.txt" in children_names
+    assert "file3.txt" in children_names
+    assert "file2.log" not in children_names
+
+def test_get_directory_info_include_and_exclude_globs(temp_filesystem_client, tmp_path):
+    """Test get_directory_info with both include and exclude globs."""
+    # Create files with different extensions
+    (tmp_path / "file1.txt").write_text("content")
+    (tmp_path / "file2.log").write_text("content")
+    (tmp_path / "file3.txt").write_text("content")
+    (tmp_path / "file4.md").write_text("content")
+
+    # Test with include and exclude globs
+    include_globs = ["*.txt", "*.md"]
+    exclude_globs = ["file3.txt"]
+    dir_info = temp_filesystem_client.get_directory_info(str(tmp_path), include_globs=include_globs, exclude_globs=exclude_globs)
+    children_names = [child.name for child in dir_info.children]
+    assert "file1.txt" in children_names
+    assert "file4.md" in children_names
+    assert "file2.log" not in children_names
+    assert "file3.txt" not in children_names

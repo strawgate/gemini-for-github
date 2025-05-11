@@ -118,7 +118,7 @@ class GenAIClient:
             safety_settings=safety_settings,
             tools=tools,
             system_instruction=system_prompt,
-            stop_sequences=["Stop."],
+            #stop_sequences=["Stop."],
             tool_config=ToolConfig(
                 function_calling_config=FunctionCallingConfig(
                     # mode=FunctionCallingConfigMode.ANY,

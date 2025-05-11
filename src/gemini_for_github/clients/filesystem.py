@@ -195,8 +195,8 @@ class FileOperations:
         async with handle_file_errors(file_path):
             with open(file_path, encoding="utf-8") as f:
                 content = f.read()
-            logger.info(f"File read successfully from {file_path}")
-            return content
+        logger.info(f"File read successfully from {file_path}")
+        return content
 
     async def create(self, file_path: str, content: str) -> bool:
         """

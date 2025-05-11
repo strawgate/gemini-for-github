@@ -54,6 +54,14 @@ class GitClient:
             "clone_repository": self.clone_repository,
         }
 
+    def configure_git(self) -> bool:
+        """Configure the Git client."""
+        with self.error_handler("configuring git", f"branch name: {self.repo.active_branch.name}", GitConfigError):
+            self.repo.config_writer().set_value("user", "name", "gemini-for-github").release()
+            self.repo.config_writer().set_value("user", "email", "gemini-for-github@strawgate.com").release()
+
+        return True
+
     def clone_repository(self, branch: str = "main", overwrite: bool = True) -> bool:
         """
         Clones a repository from a given URL.
@@ -80,6 +88,8 @@ class GitClient:
             for file in files:
                 logger.info(f"File: {os.path.join(root, file)}")
 
+        self.configure_git()
+
         return True
 
     def new_branch(self, name: str):
@@ -100,15 +110,15 @@ class GitClient:
             self.repo.head.reference.set_tracking_branch(rem_ref)
             self.repo.head.reference.checkout()
 
-        with self.error_handler("configuring git", f"branch name: {name}", GitConfigError):
-            self.repo.config_writer().set_value("user", "name", "gemini-for-github").release()
-            self.repo.config_writer().set_value("user", "email", "gemini-for-github@strawgate.com").release()
+        self.configure_git()
 
     def push_current_branch(self):
         """
         Pushes the current branch to the origin.
         """
         logger.info("Pushing branch to origin")
+
+        self.configure_git()
 
         with self.error_handler("pushing branch to origin", f"branch name: {self.repo.active_branch.name}", GitPushError):
             self.origin.push(refspec=f"{self.repo.active_branch.name}:{self.repo.active_branch.name}")

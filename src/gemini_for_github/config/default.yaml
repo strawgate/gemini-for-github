@@ -115,6 +115,8 @@ commands:
       - create_issue_comment
         - "I've reviewed the issue and the codebase. I believe the problem is caused by... To solve this problem, I recommend..."
       - stop (return no response)
+    allowed_tools:
+      - google_search
 
   - name: "add_suggestion_to_pr"
     description: "Add a suggestion to an existing pull request."
@@ -202,6 +204,10 @@ commands:
         - "I've created a pull request for this issue. PR #123456"
       - stop (return no response)
     allowed_tools:
+    - write_code
+    - create_pull_request
+    - new_branch
+    - push_current_branch
     - file_create
     - file_append
     - file_erase
@@ -210,7 +216,7 @@ commands:
     - folder_delete
     - folder_move
   - name: "kindly_reject_the_user_request"
-    description: "A developer has specifically asked you to kindly reject the user's request."
+    description: "A developer has specifically asked you to kindly reject the user's request. You will never choose this command without being explicitly asked to do so."
     prompt: |
       You are being asked to kindly reject the user's request. You should respond with a polite and friendly message.
       You should use a lot of emojis to make the message more friendly. You are the mouthpiece for the developer and 

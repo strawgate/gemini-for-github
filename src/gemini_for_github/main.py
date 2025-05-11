@@ -66,9 +66,12 @@ async def _initialize_filesystem_client(root_path: Path) -> tuple[FileOperations
     return file_operations, folder_operations, {**file_operations.get_tools(), **folder_operations.get_tools()}
 
 
-async def _initialize_genai_client(gemini_api_key: str, model: str) -> GenAIClient:
+async def _initialize_genai_client(gemini_api_key: str, model: str) -> tuple[GenAIClient, dict[str, Callable]]:
     """Initializes and returns the GenAI client."""
-    return GenAIClient(api_key=gemini_api_key, model=model)
+
+    genai_client = GenAIClient(api_key=gemini_api_key, model=model)
+    genai_tools = genai_client.get_tools()
+    return genai_client, genai_tools
 
 
 async def _initialize_aider_client(root_path: Path, model: str) -> tuple[AiderClient, dict[str, Callable]]:
@@ -223,7 +226,8 @@ async def cli(
         # mcp_servers, mcp_tools = await _initialize_mcp_servers(config_file)
         # tools.update(mcp_tools)
 
-        genai_client = await _initialize_genai_client(gemini_api_key, model)
+        genai_client, genai_tools = await _initialize_genai_client(gemini_api_key, model)
+        tools.update(genai_tools)
 
         # Filter commands based on activation keywords before selecting
         if config.matches_activation_keyword(user_question, config.activation_keywords):
@@ -233,7 +237,9 @@ async def cli(
             sys.exit(0)
 
         command_tools = [tools[tool] for tool in command.allowed_tools]
-
+        command_tool_names = list(command.allowed_tools)
+        command_tool_names.sort()
+        
         context = {}
         if github_issue_number:
             context["github_issue_number"] = github_issue_number
@@ -251,7 +257,7 @@ async def cli(
         user_prompt.append(template_string.substitute(context))
 
         system_prompt = config.system_prompt
-        logger.info(f"Answering user question: {user_question} with tools: {command_tools}")
+        logger.info(f"Answering user question: {user_question} with tools: {command_tool_names}")
 
         response = await _execute_command(system_prompt, user_prompt, genai_client, command_tools)
 

@@ -1,4 +1,4 @@
-name: Test Gemini Action on Issue Comment
+name: Gemini Action on Issue Comment
 
 on:
   issue_comment:
@@ -7,15 +7,20 @@ on:
 jobs:
   run_gemini_action:
     runs-on: ubuntu-latest
-    name: Dev Gemini Action
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    if: 
+      ${{ !contains(github.event.comment.html_url, '/pull/') && contains(github.event.comment.body, '/gemini') }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Run Gemini Action CLI
+      - name: Run Gemini Action
         uses: ./
         with:
-          github-issue-number: ${{ github.event.issue.number }}
-          user-question: ${{ github.event.comment.body }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_issue_number: ${{ github.event.issue.number }}
+          user_question: ${{ github.event.comment.body }}

@@ -51,11 +51,10 @@ class AiderClient:
         """
         logger.info(f"Invoking Aider with prompt: {prompt[:100]}...")
 
-        if commit_when_done:
-            prompt += "\n\nPlease commit the changes to the repository before completing the task."
-
         try:
             result = self.coder.run(with_message=prompt)
+            if commit_when_done:
+                result = self.coder.run(with_message="/commit")
         except Exception as e:
             msg = "Error invoking Aider with prompt: " + prompt
             logger.exception(msg)

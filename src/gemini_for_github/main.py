@@ -217,7 +217,7 @@ async def cli(
         file_operations, folder_operations, filesystem_tools = await _initialize_filesystem_client(root_path)
         tools.update(filesystem_tools)
 
-        aider_client, aider_tools = await _initialize_aider_client(root_path, model)
+        aider_client, aider_tools = await _initialize_aider_client(repo_dir, model)
         tools.update(aider_tools)
 
         # mcp_servers, mcp_tools = await _initialize_mcp_servers(config_file)

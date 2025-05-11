@@ -73,6 +73,8 @@ jobs:
       - name: Run Gemini Action
         uses: YOUR_GITHUB_OWNER/YOUR_GITHUB_REPO@v1 # Replace with your repo and tag/branch
         with:
+          github_repository: ${{ github.repository }}
+          github_owner: ${{ github.repository_owner }}
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           github_issue_number: ${{ github.event.issue.number }}
@@ -94,10 +96,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Run Gemini Action
-        uses: YOUR_GITHUB_OWNER/YOUR_GITHUB_REPO@v1
+      - name: Gemini via GitHub Actions
+        uses: strawgate/gemini-for-github@0.1 # Check the listing for the latest version
         with:
+          github_repository: ${{ github.repository }}
+          github_owner: ${{ github.repository_owner }}
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           github_pr_number: ${{ github.event.pull_request.number }}

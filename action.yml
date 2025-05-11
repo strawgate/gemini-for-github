@@ -1,4 +1,4 @@
-name: "Gemini for GitHub CLI"
+name: "Gemini via GitHub Actions"
 description: "A tool to allow Gemini to interact with GitHub issues and pull requests."
 
 author: "strawgate"
@@ -65,8 +65,8 @@ runs:
   using: docker
   image: Dockerfile
   env:
-    GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    GEMINI_API_KEY: ${{ inputs.gemini_api_key }}
+    GITHUB_TOKEN: ${{ inputs.github_token }}
     GITHUB_OWNER: ${{ inputs.github_owner }}
     GITHUB_REPO: ${{ inputs.github_repo }}
     GITHUB_ISSUE_NUMBER: ${{ inputs.github_issue_number }}

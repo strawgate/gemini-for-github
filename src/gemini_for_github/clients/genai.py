@@ -1,8 +1,9 @@
+from collections.abc import Callable
 from typing import Any
 
-from google.genai.client import AsyncClient, Client
 from google.api_core.retry import if_transient_error
 from google.api_core.retry_async import AsyncRetry
+from google.genai.client import AsyncClient, Client
 from google.genai.errors import ClientError, ServerError
 from google.genai.types import (
     Content,
@@ -11,6 +12,7 @@ from google.genai.types import (
     FunctionCallingConfig,
     GenerateContentConfig,
     GenerateContentResponse,
+    GoogleSearch,
     HarmBlockThreshold,
     HarmCategory,
     SafetySetting,
@@ -23,23 +25,28 @@ from gemini_for_github.shared.logging import BASE_LOGGER
 QUOTA_EXCEEDED_ERROR_CODE = 429
 MODEL_OVERLOADED_ERROR_CODE = 503
 
+
 def is_retryable(e) -> bool:
     if if_transient_error(e):
         logger.warning(f"Retrying due to transient error: {e}")
         return True
-    if (isinstance(e, ClientError) and e.code == QUOTA_EXCEEDED_ERROR_CODE):
+    if isinstance(e, ClientError) and e.code == QUOTA_EXCEEDED_ERROR_CODE:
         logger.warning(f"Retrying due to quota exceeded: {e}")
         return True
-    if (isinstance(e, ServerError) and e.code == MODEL_OVERLOADED_ERROR_CODE):
+    if isinstance(e, ServerError) and e.code == MODEL_OVERLOADED_ERROR_CODE:
         logger.warning(f"Retrying due to model overloaded: {e}")
         return True
     return False
+
 
 logger = BASE_LOGGER.getChild("genai")
 
 
 class GenAIClient:
-    """Concrete implementation of AI model client using Google's Generative AI."""
+    """
+    A client for interacting with Google's Generative AI models (e.g., Gemini).
+    It handles content generation, tool calling, and retry logic for API requests.
+    """
 
     request_counter: int = 0
 
@@ -47,9 +54,9 @@ class GenAIClient:
         """Initialize the GenAI client.
 
         Args:
-            api_key: Google AI API key
-            model: Name of the model to use
-            temperature: Model temperature
+            api_key: Google AI API key.
+            model: Name of the specific Gemini model to use (e.g., "gemini-2.5-flash-preview-04-17").
+            temperature: Model temperature for controlling randomness in generation.
         """
 
         self.client: AsyncClient = Client(api_key=api_key).aio
@@ -59,6 +66,12 @@ class GenAIClient:
 
     def _debug(self, msg: str):
         logger.debug(f"Request {self.request_counter}: {msg}")
+
+    def get_tools(self) -> dict[str, Callable]:
+        google_search = GoogleSearch()
+        return {
+            "google_search": google_search,  # type: ignore
+        }
 
     @AsyncRetry(predicate=is_retryable)
     async def generate_content(
@@ -70,9 +83,9 @@ class GenAIClient:
         """Generate content using the AI model.
 
         Args:
-            system_prompt: System prompt
-            user_prompt: User prompt
-            tools: Optional list of Tool objects available to the model
+            system_prompt: System prompt.
+            user_prompts: A list of user prompts or a dictionary of content parts.
+            tools: Optional list of Tool objects available to the model.
 
         Returns:
             Dictionary containing the generated response
@@ -130,6 +143,12 @@ class GenAIClient:
         return {"text": response.text, "tool_calls": response.prompt_feedback}
 
     def _log_tool_calls(self, calling_history: list[Content]):
+        """
+        Logs the details of function calls made by the model during content generation.
+
+        Args:
+            calling_history: A list of Content objects representing the history of tool calls.
+        """
         for tool_call in calling_history:
             if not tool_call.parts:
                 continue

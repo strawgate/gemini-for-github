@@ -80,3 +80,7 @@ lint.extend-select = [
     "UP",
     "W",
 ]
+[tool.ruff.lint.extend-per-file-ignores]
+"tests/*.py" = [
+    "S101" # Ignore asserts
+]

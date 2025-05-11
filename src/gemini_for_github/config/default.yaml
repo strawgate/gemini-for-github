@@ -10,12 +10,13 @@ globally_allowed_tools:
   # - Tool name
   - get_pull_request_diff
   - create_pr_review
-  - get_issue_body
-  - get_issue_comments
+  - get_pull_request
+  - clone_repository
+  - get_issue_with_comments
   - create_issue_comment
-  - get_file_info
-  - get_file_content
-  - get_directory_info
+  - folder_contents
+  - folder_read_all
+  - file_read
 # Command prompts
 # Note: Command prompts can be restricted by the CLI.
 
@@ -43,7 +44,7 @@ system_prompt: |
   If you believe the user or developer is incorrect, you should not tell them they are wrong without double checking the facts. When you respond 
   you should present your findings, with copies of code or other evidence, and explain how they contradict the user's or developer's statement.
 
-  The code for the repository is already cloned locally and there may be tools available to you so that you can read as much as you need from the codebase.
+  You will always clone the repository before you start investigating.
   
   Unless the codebase is irrelevant to the ask, you will never respond without having read code from the codebase.
 
@@ -78,8 +79,8 @@ commands:
 
       An investigate always ends with you posting a comment on the issue with your findings.
     example_flow: |
-      - read issue "I'm having trouble with the login page"
-      - read comments on the issue
+      - read issue and comments from Github
+      - clone_repository
       - review codebase
         - list out the files in the repository
         - read available documentation
@@ -87,6 +88,8 @@ commands:
       - create_issue_comment
         - "I've reviewed the issue and the codebase. I believe the problem is caused by..."
       - stop
+    allowed_tools:
+      - google_search
 
   - name: "propose_solution_for_issue"
     description: "Propose a solution for a Github issue."
@@ -103,8 +106,8 @@ commands:
       If you do find other issues while investigating, you should briefly mention them and offer to create a new issue for them.
       THEN, stop generating any further output or calling any further tools.
     example_flow: |
-      - read issue "I'm having trouble with the login page"
-      - read comments on the issue
+      - read issue with comments "I'm having trouble with the login page"
+      - clone_repository
       - review codebase
         - list out the files in the repository
         - read available documentation
@@ -113,6 +116,44 @@ commands:
         - "I've reviewed the issue and the codebase. I believe the problem is caused by... To solve this problem, I recommend..."
       - stop (return no response)
 
+  - name: "add_suggestion_to_pr"
+    description: "Add a suggestion to an existing pull request."
+    prompt: |
+      You are being asked to add a suggestion to an existing pull request. You should read the pull request and the codebase to add a suggestion to the pull request.
+      You should then post a comment on the pull request with the suggestion.
+
+      On GitHub pull request number: $github_pr_number -- the developer has asked: $user_question
+
+  - name: "update_pr_with_code"
+    description: "Update an existing pull request with code as requested by the developer."
+    prompt: |
+      You are being asked to update a pull request with code. You should read the pull request, clone the branch,
+      update the code, and push the changes to the branch.
+
+      You should then post a comment to the pull request with a summary of the changes you made
+
+      On GitHub pull request number: $github_pr_number -- the developer has asked: $user_question
+    example_flow: |
+      - read pull request
+      - clone_repository
+      - update code
+      - push_current_branch
+      - create_pull_request_comment
+        - "I've updated the pull request with the latest code."
+      - stop (return no response)
+    allowed_tools:
+      - write_code
+      - get_pull_request
+      - push_current_branch
+      - create_pull_request_comment
+      - file_create
+      - file_append
+      - file_erase
+      - file_move
+      - file_delete
+      - folder_delete
+      - folder_move
+
   - name: "create_pr_for_issue"
     description: "Create a pull request for a Github issue."
     allowed_tools:
@@ -120,6 +161,13 @@ commands:
       - create_pull_request
       - new_branch
       - push_current_branch
+      - file_create
+      - file_append
+      - file_erase
+      - file_move
+      - file_delete
+      - folder_delete
+      - folder_move
 
     prompt: |
       You are being asked to create a pull request for a Github issue. You should thoroughly review the issue, assume the 
@@ -138,8 +186,8 @@ commands:
       THEN, stop generating any further output or calling any further tools. ABSOLUTELY STOP.
 
     example_flow: |
-      - read issue "I'm having trouble with the login page"
-      - read comments on the issue
+      - read issue with comments "I'm having trouble with the login page"
+      - clone_repository
       - review codebase
         - list out the files in the repository
         - read available documentation
@@ -147,9 +195,30 @@ commands:
       - if reasonable solution, create a new branch
         - new_branch
         - write_code
-        - push
-        - create_pr
+        - push_current_branch
+        - create_pull_request
           - "This PR resolves a problem reported by #issue_number. A summary of that problem is... It addresses the problem by..."
       - create_issue_comment
         - "I've created a pull request for this issue. PR #123456"
+      - stop (return no response)
+    allowed_tools:
+    - file_create
+    - file_append
+    - file_erase
+    - file_move
+    - file_delete
+    - folder_delete
+    - folder_move
+  - name: "kindly_reject_the_user_request"
+    description: "A developer has specifically asked you to kindly reject the user's request."
+    prompt: |
+      You are being asked to kindly reject the user's request. You should respond with a polite and friendly message.
+      You should use a lot of emojis to make the message more friendly. You are the mouthpiece for the developer and 
+      you want to make sure the user knows that we appreciate their request but we have chosen to not implement it.
+
+      On GitHub issue number: $github_issue_number -- the developer has asked: $user_question
+    example_flow: |
+      - read issue with comments "I'm having trouble with the login page"
+      - create_issue_comment
+        - "Thanks so much for you're request :) We're not..."
       - stop (return no response)

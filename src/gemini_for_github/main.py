@@ -10,7 +10,7 @@ import yaml
 from pydantic import ValidationError
 
 from gemini_for_github.clients.aider import AiderClient
-from gemini_for_github.clients.filesystem import FilesystemClient
+from gemini_for_github.clients.filesystem import FileOperations, FolderOperations
 from gemini_for_github.clients.genai import GenAIClient
 from gemini_for_github.clients.git import GitClient
 from gemini_for_github.clients.github import GitHubAPIClient
@@ -25,7 +25,9 @@ from gemini_for_github.shared.logging import BASE_LOGGER
 logger = BASE_LOGGER.getChild("main")
 
 
-async def _load_config(config_file_path: str, tool_restrictions: str | None, command_restrictions: str | None, activation_keywords: str | None) -> tuple[Config, ConfigFile]:
+async def _load_config(
+    config_file_path: str, tool_restrictions: str | None, command_restrictions: str | None, activation_keywords: str | None
+) -> tuple[Config, ConfigFile]:
     """Loads and parses the application configuration."""
     with Path(config_file_path).open() as f:
         config_data = yaml.safe_load(f)
@@ -35,35 +37,48 @@ async def _load_config(config_file_path: str, tool_restrictions: str | None, com
     split_command_restrictions = command_restrictions.split(",") if command_restrictions else None
     split_activation_keywords = activation_keywords.split(",") if activation_keywords else None
 
-    config = Config.from_config_file(config_file, tool_restrictions=split_tool_restrictions, command_restrictions=split_command_restrictions, activation_keywords=split_activation_keywords)
+    config = Config.from_config_file(
+        config_file,
+        tool_restrictions=split_tool_restrictions,
+        command_restrictions=split_command_restrictions,
+        activation_keywords=split_activation_keywords,
+    )
     return config, config_file
 
 
 async def _initialize_github_client(github_token: str, github_repo_id: int) -> tuple[GitHubAPIClient, dict[str, Callable]]:
+    """Initializes and returns the GitHub API client and its tools."""
     github_client = GitHubAPIClient(token=github_token, repo_id=github_repo_id)
     return github_client, github_client.get_tools()
 
 
-async def _initialize_git_client(repo_path: Path) -> tuple[GitClient, dict[str, Callable]]:
-    git_client = GitClient(repo_path=str(repo_path))
+async def _initialize_git_client(repo_dir: Path, github_token: str, owner_repo: str) -> tuple[GitClient, dict[str, Callable]]:
+    """Initializes and returns the Git client and its tools using the given repository path."""
+    # TODO: The 'github_repo' parameter is currently unused by the GitClient constructor.
+    # Investigate if it's needed or can be removed.
+    git_client = GitClient(repo_dir=str(repo_dir), github_token=github_token, owner_repo=owner_repo)
     return git_client, git_client.get_tools()
 
-
-async def _initialize_filesystem_client(root_path: Path) -> tuple[FilesystemClient, dict[str, Callable]]:
-    filesystem_client = FilesystemClient(root=root_path)
-    return filesystem_client, filesystem_client.get_tools()
+async def _initialize_filesystem_client(root_path: Path) -> tuple[FileOperations, FolderOperations, dict[str, Callable]]:
+    """Initializes and returns the Filesystem client and its tools."""
+    file_operations = FileOperations(root_dir=root_path)
+    folder_operations = FolderOperations(root_dir=root_path)
+    return file_operations, folder_operations, {**file_operations.get_tools(), **folder_operations.get_tools()}
 
 
 async def _initialize_genai_client(gemini_api_key: str, model: str) -> GenAIClient:
+    """Initializes and returns the GenAI client."""
     return GenAIClient(api_key=gemini_api_key, model=model)
 
 
 async def _initialize_aider_client(root_path: Path, model: str) -> tuple[AiderClient, dict[str, Callable]]:
+    """Initializes and returns the Aider client and its tools."""
     aider_client = AiderClient(root=root_path, model=model)
     return aider_client, aider_client.get_tools()
 
 
 async def _initialize_mcp_servers(config_file: ConfigFile) -> tuple[list[MCPServer], dict[str, Callable]]:
+    """Initializes and returns a list of MCP servers and their aggregated tools based on the configuration."""
     mcp_servers = []
     tools = {}
     for server_config in config_file.mcp_servers:
@@ -136,6 +151,7 @@ async def _execute_command(system_prompt: str, user_prompts: list[str], genai_cl
 
 @asyncclick.command()
 @asyncclick.option("--github-token", type=str, required=True, envvar="GITHUB_TOKEN", help="GitHub API token")
+@asyncclick.option("--github-repo", type=str, required=True, envvar="GITHUB_REPO", help="GitHub repository owner/name")
 @asyncclick.option("--github-repo-id", type=int, required=True, envvar="GITHUB_REPO_ID", help="GitHub repository ID")
 @asyncclick.option("--gemini-api-key", type=str, required=True, envvar="GEMINI_API_KEY", help="Gemini API key")
 @asyncclick.option("--github-issue-number", type=int, envvar="GITHUB_ISSUE_NUMBER", default=None, help="GitHub issue number")
@@ -159,6 +175,7 @@ async def _execute_command(system_prompt: str, user_prompts: list[str], genai_cl
 @asyncclick.option("--user-question", type=str, required=True, envvar="USER_QUESTION", help="The user's natural language question")
 async def cli(
     github_token: str,
+    github_repo: str,
     github_repo_id: int,
     gemini_api_key: str,
     github_issue_number: int | None,
@@ -171,6 +188,13 @@ async def cli(
     debug: bool,
     user_question: str,
 ):
+    """
+    Main command-line interface for the Gemini for GitHub AI Agent.
+
+    This script loads configuration, initializes clients (GitHub, Git, GenAI, etc.),
+    selects an appropriate command based on user input, and executes it.
+    It handles GitHub issue/PR context, activation keywords, and tool/command restrictions.
+    """
     try:
         root_path = Path.cwd()
 
@@ -185,13 +209,15 @@ async def cli(
         github_client, github_tools = await _initialize_github_client(github_token, github_repo_id)
         tools.update(github_tools)
 
-        git_client, git_tools = await _initialize_git_client(root_path)
+        repo_dir = root_path / "repo"
+
+        git_client, git_tools = await _initialize_git_client(repo_dir, github_token, github_repo)
         tools.update(git_tools)
 
-        filesystem_client, filesystem_tools = await _initialize_filesystem_client(root_path)
+        file_operations, folder_operations, filesystem_tools = await _initialize_filesystem_client(root_path)
         tools.update(filesystem_tools)
 
-        aider_client, aider_tools = await _initialize_aider_client(root_path, model)
+        aider_client, aider_tools = await _initialize_aider_client(repo_dir, model)
         tools.update(aider_tools)
 
         # mcp_servers, mcp_tools = await _initialize_mcp_servers(config_file)
@@ -206,23 +232,7 @@ async def cli(
             logger.info("No activation keyword found in user question. Skipping command selection.")
             sys.exit(0)
 
-        # command_allowed_tools = command.allowed_tools
-
-        # disallowed_tools: list[str] = []
-        # allowed_tools: list[Callable] = []
-        # allowed_tool_names: list[str] = []
-
-        # for tool in tools:
-        #     if tool in command_allowed_tools:
-        #         allowed_tools.append(tools[tool])
-        #         allowed_tool_names.append(tool)
-        #     else:
-        #         disallowed_tools.append(tool)
-
-        command_tools = [
-            tools[tool]
-            for tool in command.allowed_tools
-        ]
+        command_tools = [tools[tool] for tool in command.allowed_tools]
 
         context = {}
         if github_issue_number:

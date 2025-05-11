@@ -10,6 +10,24 @@ This project provides a command-line interface (CLI) tool to interact with GitHu
 - Triggering actions based on user comments and predefined commands.
 - Potential for making code changes via integration with tools like Aider.
 
+## Workflow
+
+The following diagram illustrates the typical workflow when the `gemini-for-github` action is triggered:
+
+```mermaid
+graph TD
+    A[GitHub Event] --> B{Contains Activation Keyword}
+    B -- Yes --> C[Action Triggered]
+    B -- No --> E[Action Ends]
+    E --> G[Initialize Clients]
+    G --> J[Process User Question and Context]
+    J -- Yes --> L[Execute Actions]
+    L --> M[Post to GitHub]
+    M --> D
+    J -- No --> N[Log No Command]
+    N --> D
+```
+
 ## Installation
 
 (Add installation instructions here once available, e.g., using Poetry or pip)
@@ -28,31 +46,11 @@ Key configuration options include:
 
 Environment variables can also be used for configuration, particularly for sensitive information like API keys and GitHub credentials. Refer to [`src/gemini_for_github/cli.py`](src/gemini_for_github/cli.py) for the list of supported environment variables.
 
-## Usage
-
-The application is designed to be run as a CLI tool. Basic usage involves providing necessary credentials and a user question.
-
-Example:
-
-```bash
-python -m gemini_for_github --github-token YOUR_GITHUB_TOKEN --github-owner YOUR_GITHUB_OWNER --github-repo YOUR_GITHUB_REPO --gemini-api-key YOUR_GEMINI_API_KEY --user-question "Your question here"
-```
-
-You can also specify a configuration file:
-
-```bash
-python -m gemini_for_github --config-file /path/to/your/config.yaml --user-question "Your question here"
-```
-
-Refer to the `src/gemini_for_github/cli.py` for a full list of command-line options.
-
 ## GitHub Action Usage
 
-This action can be triggered by `issue_comment` and `pull_request` events.
+This action can be triggered by `issue_comment`, `pull_request`, or other events.
 
-### Usage in Other Repositories
-
-To use this action in another repository, add a workflow file (e.g., `.github/workflows/gemini-action.yml`) with the following content, replacing `YOUR_GITHUB_OWNER/YOUR_GITHUB_REPO` with the actual repository details:
+To use this action in another repository, add a workflow file (e.g., `.github/workflows/gemini-action.yml`):
 
 #### Triggering via Issue Comment
 
@@ -73,10 +71,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Gemini Action
-        uses: YOUR_GITHUB_OWNER/YOUR_GITHUB_REPO@v1 # Replace with your repo and tag/branch
+        uses: strawgate/gemini-for-github@0.3 # Replace with your repo and tag/branch
         with:
-          github_repository: ${{ github.repository }}
-          github_owner: ${{ github.repository_owner }}
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           github_issue_number: ${{ github.event.issue.number }}
@@ -96,21 +92,18 @@ jobs:
   run_gemini_action:
     runs-on: ubuntu-latest
     if: 
-      contains(github.event.comment.body, '/gemini')
+      contains(github.event.comment.body, '/gemini') # This condition might need adjustment for PRs, e.g., based on PR body or specific labels
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Gemini via GitHub Actions
-        uses: strawgate/gemini-for-github@0.1 # Check the listing for the latest version
+        uses: strawgate/gemini-for-github@0.3 # Check the listing for the latest version
         with:
-          github_repository: ${{ github.repository }}
-          github_owner: ${{ github.repository_owner }}
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           github_pr_number: ${{ github.event.pull_request.number }}
-          user_question: "gemini review this pull request."
+          user_question: "gemini review this pull request." # Or use a comment from the PR
 ```
-
 
 ## Contributing
 

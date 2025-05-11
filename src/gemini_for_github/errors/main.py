@@ -1,3 +1,6 @@
+"""Custom exceptions for the main application logic."""
+
+
 class MainError(Exception):
     """Base class for all custom exceptions in the main module."""
 

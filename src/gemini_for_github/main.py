@@ -15,6 +15,7 @@ from gemini_for_github.clients.genai import GenAIClient
 from gemini_for_github.clients.git import GitClient
 from gemini_for_github.clients.github import GitHubAPIClient
 from gemini_for_github.clients.mcp import MCPServer
+from gemini_for_github.clients.web import WebClient
 from gemini_for_github.config.config import Command, Config, ConfigFile
 from gemini_for_github.errors.aider import AiderError
 from gemini_for_github.errors.filesystem import FilesystemError
@@ -212,6 +213,10 @@ async def cli(
 
         aider_client, aider_tools = await _initialize_aider_client(repo_dir, model)
         tools.update(aider_tools)
+
+        web_client = WebClient()
+        web_tools = web_client.get_tools()
+        tools.update(web_tools)
 
         # mcp_servers, mcp_tools = await _initialize_mcp_servers(config_file)
         # tools.update(mcp_tools)

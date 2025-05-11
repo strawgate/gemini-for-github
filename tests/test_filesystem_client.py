@@ -67,3 +67,31 @@ def test_get_directory_info_nested_no_exception(temp_filesystem_client, tmp_path
         assert isinstance(dir_info, DirectoryInfo)
     except Exception as e:
         pytest.fail(f"get_directory_info raised an exception: {e}")
+
+def test_get_directory_info_hidden_files(temp_filesystem_client, tmp_path):
+    """Test get_directory_info handles hidden files correctly."""
+    # Create a hidden file
+    hidden_file_path = tmp_path / ".hidden_file"
+    hidden_file_path.write_text("hidden content")
+
+    # Test with exclude_hidden=True (default)
+    dir_info_excluded = temp_filesystem_client.get_directory_info(str(tmp_path), exclude_hidden=True)
+    assert not any(child.name == ".hidden_file" for child in dir_info_excluded.children)
+
+    # Test with exclude_hidden=False
+    dir_info_included = temp_filesystem_client.get_directory_info(str(tmp_path), exclude_hidden=False)
+    assert any(child.name == ".hidden_file" for child in dir_info_included.children)
+
+def test_get_directory_info_hidden_folders(temp_filesystem_client, tmp_path):
+    """Test get_directory_info handles hidden folders correctly."""
+    # Create a hidden directory
+    hidden_dir_path = tmp_path / ".hidden_dir"
+    hidden_dir_path.mkdir()
+
+    # Test with exclude_hidden=True (default)
+    dir_info_excluded = temp_filesystem_client.get_directory_info(str(tmp_path), exclude_hidden=True)
+    assert not any(child.name == ".hidden_dir" for child in dir_info_excluded.children)
+
+    # Test with exclude_hidden=False
+    dir_info_included = temp_filesystem_client.get_directory_info(str(tmp_path), exclude_hidden=False)
+    assert any(child.name == ".hidden_dir" for child in dir_info_included.children)

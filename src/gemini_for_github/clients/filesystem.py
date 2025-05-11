@@ -1,18 +1,20 @@
 from collections.abc import Callable
+from contextlib import contextmanager
 from fnmatch import fnmatch
 from pathlib import Path
 from typing import Union
 
 from pydantic import BaseModel
 
-from gemini_for_github.errors.filesystem import FilesystemNotFoundError, FilesystemOutsideRootError, FilesystemReadError
+from gemini_for_github.errors.filesystem import FilesystemError, FilesystemNotFoundError, FilesystemOutsideRootError, FilesystemReadError
 from gemini_for_github.shared.logging import BASE_LOGGER
 
 logger = BASE_LOGGER.getChild("filesystem")
 
 
 class DirectoryInfo(BaseModel):
-    path: str
+    name: str
+    relative_path: str
     children: list["FileInfo | DirectoryInfo"]
     children_count: int
 
@@ -26,10 +28,10 @@ class FileInfo(BaseModel):
 
 
 class FilesystemClient:
-    root: str
+    root: Path
 
     def __init__(self, root: Path):
-        self.root = str(root)
+        self.root = root
 
     def get_tools(self) -> dict[str, Callable]:
         """Get the tools available to the Filesystem client."""
@@ -39,39 +41,60 @@ class FilesystemClient:
             "get_directory_info": self.get_directory_info,
         }
 
-    def get_file_info(self, path: str) -> FileInfo:
-        logger.info(f"Getting file info for {path}")
-        p = Path(path)
+    @contextmanager
+    def error_handler(self, path: str, msg: str):
+        try:
+            yield Path(path)
+        except FilesystemError as e:
+            raise e
+        except Exception as e:
+            logger.exception(f"Unknown error occurred while getting file info for {path}")
+            raise FilesystemError(msg) from e
 
-        if not p.is_file():
-            msg = f"File {path} is not a file"
-            raise FilesystemNotFoundError(msg)
+    def _get_rendered_path(self, root_dir: Path, relative_path: Path) -> Path:
 
-        if not p.is_relative_to(self.root):
-            msg = f"File {path} is not a child of the root directory"
+        rendered_path = Path(root_dir).joinpath(relative_path).resolve()
+
+        if not rendered_path.relative_to(root_dir.resolve()):
+            msg = f"File {relative_path} is not a child of the root directory"
             raise FilesystemOutsideRootError(msg)
 
-        relative_path = str(p.relative_to(self.root))
+        return rendered_path
+
+    def get_file_info(self, relative_path: str) -> FileInfo:
+        logger.info(f"Getting file info for {relative_path}")
+
+        with self.error_handler(relative_path, "Failed to get file info") as p:
+            if not p.is_file():
+                msg = f"File {relative_path} is not a file"
+                raise FilesystemNotFoundError(msg)
+
+            rendered_path = self._get_rendered_path(self.root, p)
+            rendered_relative_path = rendered_path.relative_to(self.root)
+            size = p.stat().st_size
+            modified = p.stat().st_mtime
 
         return FileInfo(
             name=p.name,
             extension=p.suffix,
-            relative_path=relative_path,
-            size=p.stat().st_size,
-            modified=p.stat().st_mtime,
+            relative_path=str(rendered_relative_path),
+            size=size,
+            modified=modified,
         )
 
-    def get_file_content(self, path: str) -> str:
-        logger.info(f"Getting file content for {path}")
-        try:
-            p = Path(path)
-            return p.read_text()
-        except Exception as e:
-            msg = f"Failed to read file {path}"
-            raise FilesystemReadError(msg) from e
+    def get_file_content(self, relative_path: str) -> str:
+        logger.info(f"Getting file content for {relative_path}")
+        
+        with self.error_handler(relative_path, "Failed to get file content") as p:
+            try:
+                rendered_path = self._get_rendered_path(self.root, p)
+                return rendered_path.read_text()
+            except Exception as e:
+                msg = f"Failed to read file {relative_path}"
+                raise FilesystemReadError(msg) from e
 
-    def get_files_content(self, paths: list[str]) -> dict[str, str]:
-        return {path: self.get_file_content(path) for path in paths}
+    def get_files_content(self, relative_paths: list[str]) -> dict[str, str]:
+        return {relative_path: self.get_file_content(relative_path) for relative_path in relative_paths}
 
     def get_directory_info(
         self,
@@ -96,31 +119,33 @@ class FilesystemClient:
         logger.info(
             f"Getting directory info for {relative_path} with levels {levels}, exclude_hidden {exclude_hidden}, exclude_globs {exclude_globs}, include_globs {include_globs}"
         )
-        p = Path(relative_path)
-        if not p.is_dir():
-            msg = f"Directory {relative_path} is not a directory"
-            raise FilesystemNotFoundError(msg)
 
-        if not p.is_relative_to(self.root):
-            msg = f"Directory {relative_path} is not a child of the root directory"
-            raise FilesystemOutsideRootError(msg)
+        with self.error_handler(relative_path, "Failed to get directory info") as p:
 
-        children = [child for child in p.iterdir() if not child.name.startswith(".")] if exclude_hidden else list(p.iterdir())
+            rendered_path = self._get_rendered_path(self.root, p)
+            rendered_relative_path = rendered_path.relative_to(self.root)
 
-        if exclude_globs:
-            children = [child for child in children if not any(fnmatch(child.name, glob) for glob in exclude_globs)]
+            if not rendered_path.is_dir():
+                msg = f"Directory {relative_path} is not a directory"
+                raise FilesystemNotFoundError(msg)
 
-        if include_globs:
-            children = [child for child in children if any(fnmatch(child.name, glob) for glob in include_globs)]
+            children = [child for child in rendered_path.iterdir() if not child.name.startswith(".")] if exclude_hidden else list(rendered_path.iterdir())
 
-        children_count = len(list(p.iterdir()))
+            if exclude_globs:
+                children = [child for child in children if not any(fnmatch(child.name, glob) for glob in exclude_globs)]
 
-        if levels == 0:
-            return DirectoryInfo(path=str(p.relative_to(self.root)), children=[], children_count=children_count)
+            if include_globs:
+                children = [child for child in children if any(fnmatch(child.name, glob) for glob in include_globs)]
 
-        children = [
-            self.get_file_info(str(child)) if child.is_file() else self.get_directory_info(str(child), levels - 1) for child in p.iterdir()
-        ]
+            children_count = len(children)
 
-        logger.info(f"Directory {relative_path} has {children_count} children")
-        return DirectoryInfo(path=str(p.relative_to(self.root)), children=children, children_count=children_count)
+            if levels == 0:
+                return DirectoryInfo(name=rendered_relative_path.name, relative_path=str(rendered_relative_path), children=[], children_count=children_count)
+
+            children = [
+                self.get_file_info(str(child)) if child.is_file() else self.get_directory_info(str(child), levels - 1) for child in children
+            ]
+
+            logger.info(f"Directory {relative_path} has {children_count} children")
+
+        return DirectoryInfo(name=rendered_relative_path.name, relative_path=str(rendered_relative_path), children=children, children_count=children_count)

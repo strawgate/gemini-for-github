@@ -53,7 +53,6 @@ class GitClient:
             raise GitBranchExistsError(msg)
 
         try:
-            self.set_safe_directory()
             self.repo.head.reference = self.repo.create_head(name)
             rem_ref = RemoteReference(self.repo, f"refs/remotes/{self.origin.name}/{name}")
             self.repo.head.reference.set_tracking_branch(rem_ref)

@@ -16,7 +16,7 @@ class GitClient:
 
     def __init__(self, repo_dir, github_token: str, owner_repo: str):
         self.repo_dir = repo_dir
-        self.repo_url = f"https://{github_token}@github.com/{owner_repo}.git"
+        self.repo_url = f"https://x-access-token:{github_token}@github.com/{owner_repo}.git"
 
     def set_safe_directory(self):
         """

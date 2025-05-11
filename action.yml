@@ -1,4 +1,4 @@
-name: "Gemini for GitHub CLI"
+name: "Gemini via GitHub Actions"
 description: "A tool to allow Gemini to interact with GitHub issues and pull requests."
 
 author: "strawgate"

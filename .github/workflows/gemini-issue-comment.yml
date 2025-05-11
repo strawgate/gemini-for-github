@@ -1,0 +1,34 @@
+name: Gemini Action on Issue Comment
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  run_gemini_action:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x' # Specify the Python version you want to use
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Install dependencies
+        run: poetry install
+
+      - name: Run Gemini Action CLI
+        run: |
+          poetry run python src/gemini_for_github/main.py \
+            --github-owner ${{ github.repository_owner }} \
+            --github-repo ${{ github.event.repository.name }} \
+            --github-issue-number ${{ github.event.issue.number }} \
+            --user-question "${{ github.event.comment.body }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}

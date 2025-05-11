@@ -5,7 +5,7 @@ from aider.coders import Coder
 from aider.io import InputOutput
 from aider.models import Model
 
-from gemini_for_github.errors.aider import AiderNoneResultError
+from gemini_for_github.errors.aider import AiderError, AiderNoneResultError
 from gemini_for_github.shared.logging import BASE_LOGGER
 
 logger = BASE_LOGGER.getChild("aider")
@@ -20,8 +20,8 @@ class AiderClient:
         self.root = root
 
         io = InputOutput(yes=True)
-        self.model = Model(model)
-        self.coder = Coder(
+        self.model = Model(f"gemini/{model}")
+        self.coder: Coder = Coder.create(
             main_model=self.model,
             io=io,
         )
@@ -46,7 +46,12 @@ class AiderClient:
         """
         logger.info(f"Invoking Aider with prompt: {prompt[:100]}...")
 
-        result = self.coder.run(with_message=prompt)
+        try:
+            result = self.coder.run(with_message=prompt)
+        except Exception as e:
+            msg = "Error invoking Aider with prompt: " + prompt
+            logger.exception(msg)
+            raise AiderError(msg) from e
 
         if result is None:
             msg = "Aider returned None"

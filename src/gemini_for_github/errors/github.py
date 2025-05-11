@@ -19,3 +19,27 @@ class GithubClientIssueLimitError(GithubClientError):
 
 class GithubClientPRReviewLimitError(GithubClientError):
     """Error raised when the PR review limit is reached."""
+
+
+class GithubClientPRCreateError(GithubClientError):
+    """Error raised when a PR cannot be created."""
+
+
+class GithubClientIssueCommentCreateError(GithubClientError):
+    """Error raised when an issue comment cannot be created."""
+
+
+class GithubClientIssueBodyGetError(GithubClientError):
+    """Error raised when an issue body cannot be retrieved."""
+
+
+class GithubClientIssueCommentsGetError(GithubClientError):
+    """Error raised when an issue comments cannot be retrieved."""
+
+
+class GithubClientPRReviewCreateError(GithubClientError):
+    """Error raised when a PR review cannot be created."""
+
+
+class GithubClientPRDiffGetError(GithubClientError):
+    """Error raised when a PR diff cannot be retrieved."""

@@ -1,0 +1,83 @@
+name: "Gemini for GitHub CLI"
+description: "A tool to allow Gemini to interact with GitHub issues and pull requests."
+
+author: "strawgate"
+
+inputs:
+  gemini_api_key:
+    description: "The Gemini AI API key."
+    required: true
+  github_token:
+    description: "The GitHub token for authentication."
+    required: true
+  github_owner:
+    description: "The GitHub repository owner."
+    required: true
+    default: "${{ github.repository_owner }}"
+  github_repo:
+    description: "The GitHub repository name."
+    required: true
+    default: "${{ github.event.repository.name }}"
+  github_issue_number:
+    description: "The GitHub issue number (optional)."
+    required: false
+  github_pr_number:
+    description: "The GitHub pull request number (optional)."
+    required: false
+    default: "${{ github.event.pull_request.number }}"
+  model:
+    description: "The Gemini model to use."
+    required: false
+    default: "gemini-2.5-flash-preview-04-17"
+  activation_restrictions:
+    description: "Comma-separated activation restrictions (optional)."
+    required: false
+  config_file:
+    description: "Path to the config file (optional)."
+    required: false
+  tool_restrictions:
+    description: "Comma-separated list of tool restrictions (optional)."
+    required: false
+  command_restrictions:
+    description: "Comma-separated list of command restrictions (optional)."
+    required: false
+  debug:
+    description: "Enable debug mode (optional)."
+    required: false
+    default: "false"
+    type: boolean
+  user_question:
+    description: "The user's natural language question."
+    required: true
+
+outputs:
+  # Define outputs if needed, based on the CLI tool's output
+  # For example, if the tool outputs a review result or a PR number
+  # review_result:
+  #   description: "The result of the code review."
+  #   value: ${{ steps.run_cli.outputs.review_result }}
+
+branding:
+  icon: "code"
+  color: "blue"
+
+runs:
+  using: docker
+  image: Dockerfile
+  env:
+    GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    GITHUB_OWNER: ${{ inputs.github_owner }}
+    GITHUB_REPO: ${{ inputs.github_repo }}
+    GITHUB_ISSUE_NUMBER: ${{ inputs.github_issue_number }}
+    GITHUB_PR_NUMBER: ${{ inputs.github_pr_number }}
+    GEMINI_MODEL: ${{ inputs.model }}
+    ACTIVATION_RESTRICTIONS: ${{ inputs.activation_restrictions }}
+    CONFIG_FILE: ${{ inputs.config_file }}
+    TOOL_RESTRICTIONS: ${{ inputs.tool_restrictions }}
+    COMMAND_RESTRICTIONS: ${{ inputs.command_restrictions }}
+    DEBUG: ${{ inputs.debug }}
+    USER_QUESTION: ${{ inputs.user_question }}
+  args:
+    - "python"
+    - "src/gemini_for_github/main.py"

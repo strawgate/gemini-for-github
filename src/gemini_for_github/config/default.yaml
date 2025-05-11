@@ -13,9 +13,6 @@ globally_allowed_tools:
   - get_issue_body
   - get_issue_comments
   - create_issue_comment
-  - create_pull_request
-  - new_branch
-  - push
   - get_file_info
   - get_file_content
   - get_directory_info
@@ -114,10 +111,16 @@ commands:
         - read any relevant code in the codebase
       - create_issue_comment
         - "I've reviewed the issue and the codebase. I believe the problem is caused by... To solve this problem, I recommend..."
-      - stop
+      - stop (return no response)
 
   - name: "create_pr_for_issue"
     description: "Create a pull request for a Github issue."
+    allowed_tools:
+      - write_code
+      - create_pull_request
+      - new_branch
+      - push_current_branch
+
     prompt: |
       You are being asked to create a pull request for a Github issue. You should thoroughly review the issue, assume the 
       role of a developer who is responding to an issue created by a customer. You will then read the relevant parts of the codebase
@@ -149,4 +152,4 @@ commands:
           - "This PR resolves a problem reported by #issue_number. A summary of that problem is... It addresses the problem by..."
       - create_issue_comment
         - "I've created a pull request for this issue. PR #123456"
-      - stop
+      - stop (return no response)

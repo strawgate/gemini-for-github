@@ -27,7 +27,7 @@ class GenAIClient:
     request_counter: int = 0
 
     def __init__(
-        self, api_key: str, model: str = "gemini-2.5-flash-preview-04-17", temperature: float = 0.7, top_p: float = 0.8, top_k: int = 40
+        self, api_key: str, model: str = "gemini-2.5-flash-preview-04-17", temperature: float = 0.2
     ):
         """Initialize the GenAI client.
 
@@ -35,16 +35,12 @@ class GenAIClient:
             api_key: Google AI API key
             model: Name of the model to use
             temperature: Model temperature
-            top_p: Model top_p
-            top_k: Model top_k
         """
 
         self.client: AsyncClient = Client(api_key=api_key).aio
 
         self.model: str = model
         self.temperature = temperature
-        self.top_p = top_p
-        self.top_k = top_k
 
     def _debug(self, msg: str):
         logger.debug(f"Request {self.request_counter}: {msg}")
@@ -89,15 +85,14 @@ class GenAIClient:
 
         generation_config = GenerateContentConfig(
             temperature=self.temperature,
-            top_p=self.top_p,
-            top_k=self.top_k,
             max_output_tokens=4096,
             safety_settings=safety_settings,
             tools=tools,
             system_instruction=system_prompt,
+            stop_sequences=["Stop."],
             tool_config=ToolConfig(
                 function_calling_config=FunctionCallingConfig(
-                    mode=FunctionCallingConfigMode.ANY,
+                    #mode=FunctionCallingConfigMode.ANY,
                 )
             ),
         )

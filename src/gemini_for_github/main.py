@@ -26,7 +26,7 @@ logger = BASE_LOGGER.getChild("main")
 
 
 async def _load_config(
-    config_file_path: str, tool_restrictions: str | None, command_restrictions: str | None, activation_keywords: str | None
+    config_file_path: str, tool_restrictions: str | None, command_restrictions: str | None
 ) -> tuple[Config, ConfigFile]:
     """Loads and parses the application configuration."""
     with Path(config_file_path).open() as f:
@@ -35,13 +35,11 @@ async def _load_config(
 
     split_tool_restrictions = tool_restrictions.split(",") if tool_restrictions else None
     split_command_restrictions = command_restrictions.split(",") if command_restrictions else None
-    split_activation_keywords = activation_keywords.split(",") if activation_keywords else None
 
     config = Config.from_config_file(
         config_file,
         tool_restrictions=split_tool_restrictions,
         command_restrictions=split_command_restrictions,
-        activation_keywords=split_activation_keywords,
     )
     return config, config_file
 
@@ -160,13 +158,6 @@ async def _execute_command(system_prompt: str, user_prompts: list[str], genai_cl
 @asyncclick.option("--github-issue-number", type=int, envvar="GITHUB_ISSUE_NUMBER", default=None, help="GitHub issue number")
 @asyncclick.option("--github-pr-number", type=int, envvar="GITHUB_PR_NUMBER", default=None, help="GitHub pull request number")
 @asyncclick.option("--model", type=str, default="gemini-2.5-flash-preview-04-17", envvar="GEMINI_MODEL", help="Gemini model to use")
-@asyncclick.option(
-    "--activation-keywords",
-    type=str,
-    default=None,
-    envvar="ACTIVATION_KEYWORDS",
-    help="Comma-separated activation keywords (e.g., gemini,bill2.0)",
-)
 @asyncclick.option("--config-file", type=str, default=None, envvar="CONFIG_FILE", help="Path to the config file")
 @asyncclick.option(
     "--tool-restrictions", type=str, default=None, envvar="TOOL_RESTRICTIONS", help="Comma-separated list of tool restrictions"
@@ -184,7 +175,6 @@ async def cli(
     github_issue_number: int | None,
     github_pr_number: int | None,
     model: str,
-    activation_keywords: str | None,
     config_file: str | None,
     tool_restrictions: str | None,
     command_restrictions: str | None,
@@ -196,7 +186,7 @@ async def cli(
 
     This script loads configuration, initializes clients (GitHub, Git, GenAI, etc.),
     selects an appropriate command based on user input, and executes it.
-    It handles GitHub issue/PR context, activation keywords, and tool/command restrictions.
+    It handles GitHub issue/PR context and tool/command restrictions.
     """
     try:
         root_path = Path.cwd()
@@ -206,7 +196,7 @@ async def cli(
 
         script_dir = Path(__file__).parent
         config_path = config_file if config_file else script_dir / "config" / "default.yaml"
-        config, _ = await _load_config(str(config_path), tool_restrictions, command_restrictions, activation_keywords)
+        config, _ = await _load_config(str(config_path), tool_restrictions, command_restrictions)
 
         tools = {}
         github_client, github_tools = await _initialize_github_client(github_token, github_repo_id)
@@ -229,12 +219,7 @@ async def cli(
         genai_client, genai_tools = await _initialize_genai_client(gemini_api_key, model)
         tools.update(genai_tools)
 
-        # Filter commands based on activation keywords before selecting
-        if config.matches_activation_keyword(user_question, config.activation_keywords):
-            command = await _select_command(user_question, config.commands, genai_client)
-        else:
-            logger.info("No activation keyword found in user question. Skipping command selection.")
-            sys.exit(0)
+        command = await _select_command(user_question, config.commands, genai_client)
 
         command_tools = [tools[tool] for tool in command.allowed_tools]
         command_tool_names = list(command.allowed_tools)

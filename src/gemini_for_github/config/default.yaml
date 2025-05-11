@@ -119,7 +119,7 @@ commands:
       - write_code
       - create_pull_request
       - new_branch
-      - push
+      - push_current_branch
 
     prompt: |
       You are being asked to create a pull request for a Github issue. You should thoroughly review the issue, assume the 

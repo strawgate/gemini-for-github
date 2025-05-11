@@ -29,6 +29,7 @@
                "--user-question",
                "gemini make a pull request for the issue"
           ],
+          "cwd": "${workspaceFolder}/cloned_repo/github-for-gemini-demo",
           "console": "integratedTerminal",
           "envFile": "${workspaceFolder}/.env",
           "justMyCode": true,

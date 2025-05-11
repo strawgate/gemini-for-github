@@ -46,6 +46,144 @@ python -m gemini_for_github --config-file /path/to/your/config.yaml --user-quest
 
 Refer to the `src/gemini_for_github/cli.py` for a full list of command-line options.
 
+## GitHub Action Usage
+
+This action can be triggered by `issue_comment` and `pull_request` events.
+
+### Usage in Other Repositories
+
+To use this action in another repository, add a workflow file (e.g., `.github/workflows/gemini-action.yml`) with the following content, replacing `YOUR_GITHUB_OWNER/YOUR_GITHUB_REPO` with the actual repository details:
+
+#### Triggering via Issue Comment
+
+```yaml
+name: Gemini Action on Issue Comment
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  run_gemini_action:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Gemini Action
+        uses: YOUR_GITHUB_OWNER/YOUR_GITHUB_REPO@v1 # Replace with your repo and tag/branch
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_issue_number: ${{ github.event.issue.number }}
+          user_question: ${{ github.event.comment.body }}
+```
+
+#### Triggering via Pull Request
+
+```yaml
+name: Gemini Action on Pull Request
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  run_gemini_action:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Gemini Action
+        uses: YOUR_GITHUB_OWNER/YOUR_GITHUB_REPO@v1
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_pr_number: ${{ github.event.pull_request.number }}
+          user_question: "gemini review this pull request."
+```
+
+### Usage in this Development Repository
+
+In this development repository, instead of using the action directly, we will install the dependencies and run the Python script. This is useful for testing changes locally before publishing a new version of the action.
+
+#### Triggering via Issue Comment
+
+```yaml
+name: Gemini Action on Issue Comment (Dev)
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  run_gemini_action:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x' # Specify the Python version you want to use
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Install dependencies
+        run: poetry install
+
+      - name: Run Gemini Action CLI
+        run: |
+          poetry run python src/gemini_for_github/main.py \
+            --gemini-api-key ${{ secrets.GEMINI_API_KEY }} \
+            --github-token ${{ secrets.GITHUB_TOKEN }} \
+            --github-owner ${{ github.repository_owner }} \
+            --github-repo ${{ github.event.repository.name }} \
+            --github-issue-number ${{ github.event.issue.number }} \
+            --user-question "${{ github.event.comment.body }}"
+```
+
+#### Triggering via Pull Request
+
+```yaml
+name: Gemini Action on Pull Request (Dev)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  run_gemini_action:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x' # Specify the Python version you want to use
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Install dependencies
+        run: poetry install
+
+      - name: Run Gemini Action CLI
+        run: |
+          poetry run python src/gemini_for_github/main.py \
+            --gemini-api-key ${{ secrets.GEMINI_API_KEY }} \
+            --github-token ${{ secrets.GITHUB_TOKEN }} \
+            --github-owner ${{ github.repository_owner }} \
+            --github-repo ${{ github.event.repository.name }} \
+            --github-pr-number ${{ github.event.pull_request.number }} \
+            --user-question "gemini review this pull request." # Default question for PRs
+```
+
 ## Contributing
 
 (Add contributing guidelines here)

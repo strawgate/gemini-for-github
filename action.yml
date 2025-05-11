@@ -1,5 +1,5 @@
 name: "Gemini for GitHub CLI"
-description: "A CLI tool to interact with GitHub and the Gemini API for tasks such as code review and analysis."
+description: "A tool to allow Gemini to interact with GitHub issues and pull requests."
 
 author: "strawgate"
 

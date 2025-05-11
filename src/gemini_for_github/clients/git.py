@@ -24,7 +24,7 @@ class GitClient:
         """Get the tools available to the Git client."""
         return {
             "new_branch": self.new_branch,
-            "push": self.push,
+            "push_current_branch": self.push_current_branch,
         }
 
     def return_to_starting_branch(self):
@@ -57,13 +57,13 @@ class GitClient:
             raise GitNewBranchError(msg) from e
 
 
-    def push(self):
+    def push_current_branch(self):
         """
-        Pushes the given branch to the origin.
+        Pushes the current branch to the origin.
         """
         logger.info("Pushing branch to origin")
         try:
-            self.origin.push()
+            self.origin.push(refspec=f"{self.repo.active_branch.name}:{self.repo.active_branch.name}")
         except Exception as e:
             msg = f"Error pushing branch to origin: {e}"
             logger.exception(msg)

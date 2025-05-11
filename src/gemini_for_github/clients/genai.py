@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from typing import Any
 
 from google.api_core.retry import if_transient_error
@@ -11,6 +12,7 @@ from google.genai.types import (
     FunctionCallingConfig,
     GenerateContentConfig,
     GenerateContentResponse,
+    GoogleSearch,
     HarmBlockThreshold,
     HarmCategory,
     SafetySetting,
@@ -64,6 +66,12 @@ class GenAIClient:
 
     def _debug(self, msg: str):
         logger.debug(f"Request {self.request_counter}: {msg}")
+
+    def get_tools(self) -> dict[str, Callable]:
+        google_search = GoogleSearch()
+        return {
+            "google_search": google_search,  # type: ignore
+        }
 
     @AsyncRetry(predicate=is_retryable)
     async def generate_content(

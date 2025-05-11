@@ -10,19 +10,13 @@ globally_allowed_tools:
   # - Tool name
   - get_pull_request_diff
   - create_pr_review
+  - get_pull_request
   - clone_repository
   - get_issue_with_comments
   - create_issue_comment
   - folder_contents
   - folder_read_all
-  - folder_move
-  - folder_delete
   - file_read
-  - file_create
-  - file_append
-  - file_erase
-  - file_move
-  - file_delete
 # Command prompts
 # Note: Command prompts can be restricted by the CLI.
 
@@ -94,6 +88,8 @@ commands:
       - create_issue_comment
         - "I've reviewed the issue and the codebase. I believe the problem is caused by..."
       - stop
+    allowed_tools:
+      - google_search
 
   - name: "propose_solution_for_issue"
     description: "Propose a solution for a Github issue."
@@ -120,6 +116,44 @@ commands:
         - "I've reviewed the issue and the codebase. I believe the problem is caused by... To solve this problem, I recommend..."
       - stop (return no response)
 
+  - name: "add_suggestion_to_pr"
+    description: "Add a suggestion to an existing pull request."
+    prompt: |
+      You are being asked to add a suggestion to an existing pull request. You should read the pull request and the codebase to add a suggestion to the pull request.
+      You should then post a comment on the pull request with the suggestion.
+
+      On GitHub pull request number: $github_pr_number -- the developer has asked: $user_question
+
+  - name: "update_pr_with_code"
+    description: "Update an existing pull request with code as requested by the developer."
+    prompt: |
+      You are being asked to update a pull request with code. You should read the pull request, clone the branch,
+      update the code, and push the changes to the branch.
+
+      You should then post a comment to the pull request with a summary of the changes you made
+
+      On GitHub pull request number: $github_pr_number -- the developer has asked: $user_question
+    example_flow: |
+      - read pull request
+      - clone_repository
+      - update code
+      - push_current_branch
+      - create_pr_comment
+        - "I've updated the pull request with the latest code."
+      - stop (return no response)
+    allowed_tools:
+      - write_code
+      - get_pull_request
+      - push_current_branch
+      - create_pr_comment
+      - file_create
+      - file_append
+      - file_erase
+      - file_move
+      - file_delete
+      - folder_delete
+      - folder_move
+
   - name: "create_pr_for_issue"
     description: "Create a pull request for a Github issue."
     allowed_tools:
@@ -127,6 +161,13 @@ commands:
       - create_pull_request
       - new_branch
       - push_current_branch
+      - file_create
+      - file_append
+      - file_erase
+      - file_move
+      - file_delete
+      - folder_delete
+      - folder_move
 
     prompt: |
       You are being asked to create a pull request for a Github issue. You should thoroughly review the issue, assume the 
@@ -160,6 +201,14 @@ commands:
       - create_issue_comment
         - "I've created a pull request for this issue. PR #123456"
       - stop (return no response)
+    allowed_tools:
+    - file_create
+    - file_append
+    - file_erase
+    - file_move
+    - file_delete
+    - folder_delete
+    - folder_move
   - name: "kindly_reject_the_user_request"
     description: "A developer has specifically asked you to kindly reject the user's request."
     prompt: |

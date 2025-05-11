@@ -54,3 +54,7 @@ class GithubClientRepositoryGetError(GithubClientError):
 
 class GithubClientIssueGetError(GithubClientError):
     """Error raised when an issue cannot be retrieved."""
+
+
+class GithubClientPRGetError(GithubClientError):
+    """Error raised when a PR cannot be retrieved."""

@@ -4,7 +4,7 @@ from typing import Any
 
 from github import Auth, Github
 from github.Repository import Repository
-
+from github.PullRequest import PullRequest
 from gemini_for_github.errors.github import (
     GithubClientCommentLimitError,
     GithubClientError,
@@ -14,6 +14,7 @@ from gemini_for_github.errors.github import (
     GithubClientIssueGetError,
     GithubClientPRCreateError,
     GithubClientPRDiffGetError,
+    GithubClientPRGetError,
     GithubClientPRLimitError,
     GithubClientPRReviewCreateError,
     GithubClientPRReviewLimitError,
@@ -81,10 +82,17 @@ class GitHubAPIClient:
         return {
             "get_pull_request_diff": self.get_pull_request_diff,
             "create_pr_review": self.create_pr_review,
+            "get_pull_request": self.get_pull_request,
             "get_issue_with_comments": self.get_issue_with_comments,
             "create_issue_comment": self.create_issue_comment,
             "create_pull_request": self.create_pull_request,
         }
+
+    def get_pull_request(self, pull_number: int) -> PullRequest:
+        """Get a pull request."""
+        with self.error_handler("getting pull request", f"pull request number: {pull_number}", GithubClientPRGetError):
+            repository = self.github.get_repo(self.repo_id)
+            return repository.get_pull(pull_number)
 
     def get_pull_request_diff(self, pull_number: int) -> str:
         """Get the diff for a pull request.

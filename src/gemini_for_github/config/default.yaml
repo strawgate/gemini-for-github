@@ -105,6 +105,7 @@ commands:
       - stop
     allowed_tools:
       - google_search
+      - search_issues
 
   - name: "propose_solution_for_issue"
     description: "Propose a solution for a Github issue."
@@ -134,6 +135,7 @@ commands:
       - stop (return no response)
     allowed_tools:
       - google_search
+      - search_issues
 
   - name: "add_suggestion_to_pr"
     description: "Add a suggestion to an existing pull request."

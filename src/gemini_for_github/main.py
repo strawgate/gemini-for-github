@@ -142,12 +142,45 @@ async def _get_allowed_commands(config: Config, command_restrictions: str | None
     return allowed_commands
 
 
-async def _execute_command(system_prompt: str, user_prompts: list[str], genai_client: GenAIClient, tools: list[Callable]) -> None:
-    """Executes the selected command."""
+async def _execute_command(
+    command: Command,
+    system_prompt: str,
+    user_prompts: list[str],
+    genai_client: GenAIClient,
+    tools: list[Callable],
+    github_client: GitHubAPIClient,
+    github_issue_number: int | None,
+) -> None:
+    """Executes the selected command and checks tool call expectations."""
 
     logger.info("Calling Gemini for prompt execution")
     final_response = await genai_client.generate_content(system_prompt, user_prompts, tools=tools)  # type: ignore
     logger.info("Gemini believes it has completed the task.")
+
+    # Track actual tool calls
+    actual_tool_calls: dict[str, int] = {}
+    if final_response and "tool_calls" in final_response:
+        for tool_call in final_response["tool_calls"]:
+            tool_name = tool_call.get("name")
+            if tool_name:
+                actual_tool_calls[tool_name] = actual_tool_calls.get(tool_name, 0) + 1
+
+    # Check expectations if defined
+    if command.expect and github_issue_number is not None:
+        for expected_tool, expected_count in command.expect.items():
+            actual_count = actual_tool_calls.get(expected_tool, 0)
+            if actual_count < expected_count:
+                comment_body = (
+                    f"**Tool Expectation Not Met for Command: `{command.name}`**\n\n"
+                    f"The tool `{expected_tool}` was expected to be called at least {expected_count} time(s), "
+                    f"but was only called {actual_count} time(s).\n\n"
+                    "This might indicate an issue with the model's understanding or execution."
+                )
+                logger.warning(f"Tool expectation failed for {expected_tool}: Expected {expected_count}, Got {actual_count}")
+                await github_client.create_issue_comment(github_issue_number, comment_body)
+                logger.info(f"Posted comment to issue #{github_issue_number} about unmet tool expectation.")
+            else:
+                logger.debug(f"Tool expectation met for {expected_tool}: Expected {expected_count}, Got {actual_count}")
 
 
 @asyncclick.command()
@@ -244,9 +277,15 @@ async def cli(
         system_prompt = config.system_prompt
         logger.info(f"Answering user question: {user_question} with tools: {command_tool_names}")
 
-        response = await _execute_command(system_prompt, user_prompt, genai_client, command_tools)
-
-        logger.info(f"Response: {response}")
+        await _execute_command(
+            command,
+            system_prompt,
+            user_prompt,
+            genai_client,
+            command_tools,
+            github_client,
+            github_issue_number,
+        )
 
     except (FileNotFoundError, yaml.YAMLError, ValidationError):
         logger.exception("Configuration error")

@@ -36,6 +36,9 @@ class ConfigFileCommandEntry(BaseModel):
     example_flow: str | None = Field(
         None, description="An illustrative example of how this command might be used or the sequence of actions it performs."
     )
+    expect: dict[str, int] | None = Field(
+        None, description="A dictionary mapping tool names to the expected minimum number of times they should be called."
+    )
 
     @model_validator(mode="after")
     def only_one_prompt_source(self) -> Self:
@@ -113,6 +116,9 @@ class Command(BaseModel):
     example_flow: str | None = Field(
         None, description="An illustrative example of how this command might be used or the sequence of actions it performs."
     )
+    expect: dict[str, int] | None = Field(
+        None, description="A dictionary mapping tool names to the expected minimum number of times they should be called."
+    )
 
     @classmethod
     def from_config_file_command_entry(
@@ -157,6 +163,7 @@ class Command(BaseModel):
             prompt=prompt,
             allowed_tools=tools,
             example_flow=config_file_command_entry.example_flow,
+            expect=config_file_command_entry.expect,
         )
 
 

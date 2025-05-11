@@ -11,8 +11,7 @@ globally_allowed_tools:
   - get_pull_request_diff
   - create_pr_review
   - clone_repository
-  - get_issue_body
-  - get_issue_comments
+  - get_issue_with_comments
   - create_issue_comment
   - get_file_info
   - get_file_content
@@ -79,8 +78,7 @@ commands:
 
       An investigate always ends with you posting a comment on the issue with your findings.
     example_flow: |
-      - read issue "I'm having trouble with the login page"
-      - read comments on the issue
+      - read issue and comments from Github
       - clone_repository
       - review codebase
         - list out the files in the repository
@@ -105,8 +103,7 @@ commands:
       If you do find other issues while investigating, you should briefly mention them and offer to create a new issue for them.
       THEN, stop generating any further output or calling any further tools.
     example_flow: |
-      - read issue "I'm having trouble with the login page"
-      - read comments on the issue
+      - read issue with comments "I'm having trouble with the login page"
       - clone_repository
       - review codebase
         - list out the files in the repository
@@ -141,8 +138,7 @@ commands:
       THEN, stop generating any further output or calling any further tools. ABSOLUTELY STOP.
 
     example_flow: |
-      - read issue "I'm having trouble with the login page"
-      - read comments on the issue
+      - read issue with comments "I'm having trouble with the login page"
       - clone_repository
       - review codebase
         - list out the files in the repository
@@ -151,8 +147,8 @@ commands:
       - if reasonable solution, create a new branch
         - new_branch
         - write_code
-        - push
-        - create_pr
+        - push_current_branch
+        - create_pull_request
           - "This PR resolves a problem reported by #issue_number. A summary of that problem is... It addresses the problem by..."
       - create_issue_comment
         - "I've created a pull request for this issue. PR #123456"
@@ -166,8 +162,7 @@ commands:
 
       On GitHub issue number: $github_issue_number -- the developer has asked: $user_question
     example_flow: |
-      - read issue "I'm having trouble with the login page"
-      - read comments on the issue
+      - read issue with comments "I'm having trouble with the login page"
       - create_issue_comment
         - "Thanks so much for you're request :) We're not..."
       - stop (return no response)

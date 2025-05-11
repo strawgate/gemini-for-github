@@ -39,17 +39,20 @@ class AiderClient:
             "write_code": self.write_code,
         }
 
-    def write_code(self, prompt: str) -> str:
+    def write_code(self, prompt: str, commit_when_done: bool = True) -> str:
         """
         Executes Aider with the given prompt.
 
         Args:
             prompt: The detailed prompt for Aider.
-
+            commit_when_done: Whether to commit the changes when done.
         Returns:
             A string containing the results of the Aider execution.
         """
         logger.info(f"Invoking Aider with prompt: {prompt[:100]}...")
+
+        if commit_when_done:
+            prompt += "\n\nPlease commit the changes to the repository before completing the task."
 
         try:
             result = self.coder.run(with_message=prompt)

@@ -68,6 +68,7 @@ def test_get_directory_info_nested_no_exception(temp_filesystem_client, tmp_path
     except Exception as e:
         pytest.fail(f"get_directory_info raised an exception: {e}")
 
+
 def test_get_directory_info_hidden_files(temp_filesystem_client, tmp_path):
     """Test get_directory_info handles hidden files correctly."""
     # Create a hidden file
@@ -82,6 +83,7 @@ def test_get_directory_info_hidden_files(temp_filesystem_client, tmp_path):
     dir_info_included = temp_filesystem_client.get_directory_info(str(tmp_path), exclude_hidden=False)
     assert any(child.name == ".hidden_file" for child in dir_info_included.children)
 
+
 def test_get_directory_info_hidden_folders(temp_filesystem_client, tmp_path):
     """Test get_directory_info handles hidden folders correctly."""
     # Create a hidden directory
@@ -95,6 +97,7 @@ def test_get_directory_info_hidden_folders(temp_filesystem_client, tmp_path):
     # Test with exclude_hidden=False
     dir_info_included = temp_filesystem_client.get_directory_info(str(tmp_path), exclude_hidden=False)
     assert any(child.name == ".hidden_dir" for child in dir_info_included.children)
+
 
 def test_get_directory_info_include_globs(temp_filesystem_client, tmp_path):
     """Test get_directory_info with include_globs."""
@@ -111,6 +114,7 @@ def test_get_directory_info_include_globs(temp_filesystem_client, tmp_path):
     assert "file3.txt" in children_names
     assert "file2.log" not in children_names
 
+
 def test_get_directory_info_exclude_globs(temp_filesystem_client, tmp_path):
     """Test get_directory_info with exclude_globs."""
     # Create files with different extensions
@@ -125,6 +129,7 @@ def test_get_directory_info_exclude_globs(temp_filesystem_client, tmp_path):
     assert "file1.txt" in children_names
     assert "file3.txt" in children_names
     assert "file2.log" not in children_names
+
 
 def test_get_directory_info_include_and_exclude_globs(temp_filesystem_client, tmp_path):
     """Test get_directory_info with both include and exclude globs."""

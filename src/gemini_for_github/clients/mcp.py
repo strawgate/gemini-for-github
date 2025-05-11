@@ -16,6 +16,7 @@ class MCPServer:
     It handles starting the server as a subprocess, verifying its readiness,
     and providing methods to interact with the server's tools.
     """
+
     client: Client
 
     def __init__(self, name: str, command: str, args: list[str], env: dict[str, str], disabled: bool):

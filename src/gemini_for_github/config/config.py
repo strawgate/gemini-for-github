@@ -10,6 +10,7 @@ logger = BASE_LOGGER.getChild("config")
 
 class ConfigFileMCPServerEntry(BaseModel):
     """Represents an MCP server entry as defined in the raw configuration file."""
+
     name: str = Field(..., description="The unique name identifier for the MCP server.")
     command: str = Field(..., description="The executable command used to start the MCP server.")
     args: list[str] = Field(..., description="A list of arguments to be passed to the MCP server command.")
@@ -19,15 +20,22 @@ class ConfigFileMCPServerEntry(BaseModel):
 
 class ConfigFileCommandEntry(BaseModel):
     """Represents a command entry as defined in the raw configuration file."""
+
     name: str = Field(..., description="The unique name identifier for the command.")
     description: str = Field(
         ...,
         description="A human-readable description of what the command does. This is used by the LLM to select the appropriate command.",
     )
-    prompt: str | None = Field(None, description="The direct string prompt to be used if this command is selected. Mutually exclusive with prompt_file.")
-    prompt_file: FilePath | None = Field(None, description="The path to a file containing the prompt to be used if this command is selected. Mutually exclusive with prompt.")
+    prompt: str | None = Field(
+        None, description="The direct string prompt to be used if this command is selected. Mutually exclusive with prompt_file."
+    )
+    prompt_file: FilePath | None = Field(
+        None, description="The path to a file containing the prompt to be used if this command is selected. Mutually exclusive with prompt."
+    )
     allowed_tools: list[str] = Field(default_factory=list, description="A list of tool names that this command is permitted to use.")
-    example_flow: str | None = Field(None, description="An illustrative example of how this command might be used or the sequence of actions it performs.")
+    example_flow: str | None = Field(
+        None, description="An illustrative example of how this command might be used or the sequence of actions it performs."
+    )
 
     @model_validator(mode="after")
     def only_one_prompt_source(self) -> Self:
@@ -76,6 +84,7 @@ class ConfigFileCommandEntry(BaseModel):
 
 class ConfigFile(BaseModel):
     """Represents the entire structure of the raw YAML configuration file."""
+
     activation_keywords: list[str] = Field(
         default_factory=list, description="Keywords that, if present at the start of a user's message, will trigger the agent."
     )
@@ -91,14 +100,19 @@ class ConfigFile(BaseModel):
 
 class Command(BaseModel):
     """Represents a processed and validated command, ready for use by the application."""
+
     name: str = Field(..., description="The unique name identifier for the command.")
     description: str = Field(
         ...,
         description="A human-readable description of what the command does. This is used by the LLM to select the appropriate command.",
     )
     prompt: str = Field(..., description="The fully resolved prompt string to be used if this command is selected.")
-    allowed_tools: list[str] = Field(..., description="The final list of tool names that this command is permitted to use after all restrictions.")
-    example_flow: str | None = Field(None, description="An illustrative example of how this command might be used or the sequence of actions it performs.")
+    allowed_tools: list[str] = Field(
+        ..., description="The final list of tool names that this command is permitted to use after all restrictions."
+    )
+    example_flow: str | None = Field(
+        None, description="An illustrative example of how this command might be used or the sequence of actions it performs."
+    )
 
     @classmethod
     def from_config_file_command_entry(
@@ -148,6 +162,7 @@ class Command(BaseModel):
 
 class MCPServerConfiguration(BaseModel):
     """Represents a processed and validated MCP server configuration, ready for use."""
+
     name: str = Field(..., description="The unique name identifier for the MCP server.")
     command: str = Field(..., description="The executable command used to start the MCP server.")
     args: list[str] = Field(..., description="A list of arguments to be passed to the MCP server command.")
@@ -165,6 +180,7 @@ class Config(BaseModel):
     Represents the fully processed and validated application configuration.
     This object is used throughout the application to access configuration values.
     """
+
     activation_keywords: list[str] = Field(
         ..., description="Keywords that, if present at the start of a user's message, will trigger the agent."
     )

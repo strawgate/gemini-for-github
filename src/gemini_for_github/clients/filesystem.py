@@ -33,6 +33,7 @@ class FilesystemClient:
     It provides methods for retrieving file and directory information and content,
     ensuring that all operations are scoped within a defined root directory.
     """
+
     root: Path
 
     def __init__(self, root: Path):
@@ -134,7 +135,7 @@ class FilesystemClient:
             The content of the file as a string.
         """
         logger.info(f"Getting file content for {relative_path}")
-        
+
         with self.error_handler(relative_path, "Failed to get file content") as p:
             try:
                 rendered_path = self._get_rendered_path(self.root, p)
@@ -180,10 +181,8 @@ class FilesystemClient:
         )
 
         with self.error_handler(relative_path, "Failed to get directory info") as p:
-
             rendered_path = self._get_rendered_path(self.root, p)
             rendered_relative_path = rendered_path.relative_to(self.root)
-
 
             logger.info(f"Rendered path: {rendered_path}")
 
@@ -191,7 +190,11 @@ class FilesystemClient:
                 msg = f"Directory {relative_path} is not a directory"
                 raise FilesystemNotFoundError(msg)
 
-            children = [child for child in rendered_path.iterdir() if not child.name.startswith(".")] if exclude_hidden else list(rendered_path.iterdir())
+            children = (
+                [child for child in rendered_path.iterdir() if not child.name.startswith(".")]
+                if exclude_hidden
+                else list(rendered_path.iterdir())
+            )
 
             logger.info(f"Children: {children}")
 
@@ -206,12 +209,16 @@ class FilesystemClient:
             children_count = len(children)
 
             if levels == 0:
-                return DirectoryInfo(name=rendered_relative_path.name, relative_path=str(rendered_relative_path), children=[], children_count=children_count)
+                return DirectoryInfo(
+                    name=rendered_relative_path.name, relative_path=str(rendered_relative_path), children=[], children_count=children_count
+                )
 
             children = [
                 self.get_file_info(str(child)) if child.is_file() else self.get_directory_info(str(child), levels - 1) for child in children
             ]
 
-            logger.info(f"Directory {relative_path} has {children_count} children")
+            logger.info(f"Directory {relative_path} has {children_count} children: {children}")
 
-        return DirectoryInfo(name=rendered_relative_path.name, relative_path=str(rendered_relative_path), children=children, children_count=children_count)
+        return DirectoryInfo(
+            name=rendered_relative_path.name, relative_path=str(rendered_relative_path), children=children, children_count=children_count
+        )

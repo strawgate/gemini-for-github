@@ -141,7 +141,13 @@ class Config(BaseModel):
     mcp_servers: list[MCPServerConfiguration] = Field(..., description="The list of MCP servers that can be used.")
 
     @classmethod
-    def from_config_file(cls, config_file: ConfigFile, tool_restrictions: list[str] | None = None, command_restrictions: list[str] | None = None, activation_keywords: list[str] | None = None) -> Self:
+    def from_config_file(
+        cls,
+        config_file: ConfigFile,
+        tool_restrictions: list[str] | None = None,
+        command_restrictions: list[str] | None = None,
+        activation_keywords: list[str] | None = None,
+    ) -> Self:
         """Create a Config instance from a ConfigFile instance.
 
         Args:

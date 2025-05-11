@@ -1,8 +1,8 @@
 from typing import Any
 
-from google.genai.client import AsyncClient, Client
 from google.api_core.retry import if_transient_error
 from google.api_core.retry_async import AsyncRetry
+from google.genai.client import AsyncClient, Client
 from google.genai.errors import ClientError, ServerError
 from google.genai.types import (
     Content,
@@ -23,17 +23,19 @@ from gemini_for_github.shared.logging import BASE_LOGGER
 QUOTA_EXCEEDED_ERROR_CODE = 429
 MODEL_OVERLOADED_ERROR_CODE = 503
 
+
 def is_retryable(e) -> bool:
     if if_transient_error(e):
         logger.warning(f"Retrying due to transient error: {e}")
         return True
-    if (isinstance(e, ClientError) and e.code == QUOTA_EXCEEDED_ERROR_CODE):
+    if isinstance(e, ClientError) and e.code == QUOTA_EXCEEDED_ERROR_CODE:
         logger.warning(f"Retrying due to quota exceeded: {e}")
         return True
-    if (isinstance(e, ServerError) and e.code == MODEL_OVERLOADED_ERROR_CODE):
+    if isinstance(e, ServerError) and e.code == MODEL_OVERLOADED_ERROR_CODE:
         logger.warning(f"Retrying due to model overloaded: {e}")
         return True
     return False
+
 
 logger = BASE_LOGGER.getChild("genai")
 

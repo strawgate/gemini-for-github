@@ -25,7 +25,9 @@ from gemini_for_github.shared.logging import BASE_LOGGER
 logger = BASE_LOGGER.getChild("main")
 
 
-async def _load_config(config_file_path: str, tool_restrictions: str | None, command_restrictions: str | None, activation_keywords: str | None) -> tuple[Config, ConfigFile]:
+async def _load_config(
+    config_file_path: str, tool_restrictions: str | None, command_restrictions: str | None, activation_keywords: str | None
+) -> tuple[Config, ConfigFile]:
     """Loads and parses the application configuration."""
     with Path(config_file_path).open() as f:
         config_data = yaml.safe_load(f)
@@ -35,7 +37,12 @@ async def _load_config(config_file_path: str, tool_restrictions: str | None, com
     split_command_restrictions = command_restrictions.split(",") if command_restrictions else None
     split_activation_keywords = activation_keywords.split(",") if activation_keywords else None
 
-    config = Config.from_config_file(config_file, tool_restrictions=split_tool_restrictions, command_restrictions=split_command_restrictions, activation_keywords=split_activation_keywords)
+    config = Config.from_config_file(
+        config_file,
+        tool_restrictions=split_tool_restrictions,
+        command_restrictions=split_command_restrictions,
+        activation_keywords=split_activation_keywords,
+    )
     return config, config_file
 
 
@@ -219,10 +226,7 @@ async def cli(
         #     else:
         #         disallowed_tools.append(tool)
 
-        command_tools = [
-            tools[tool]
-            for tool in command.allowed_tools
-        ]
+        command_tools = [tools[tool] for tool in command.allowed_tools]
 
         context = {}
         if github_issue_number:

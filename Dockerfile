@@ -12,6 +12,9 @@ ENV PATH="$POETRY_HOME/bin:$PATH"
 
 RUN curl -sSL https://install.python-poetry.org | python3 -
 
+RUN mkdir -p /github/workspace
+
+RUN git config --global --add safe.directory /github/workspace
 
 WORKDIR /app
 # Copy the entrypoint script

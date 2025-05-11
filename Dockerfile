@@ -25,6 +25,5 @@ COPY README.md README.md
 
 RUN poetry install
 
-USER 1000
 
 ENTRYPOINT ["python", "/app/src/gemini_for_github/main.py"]

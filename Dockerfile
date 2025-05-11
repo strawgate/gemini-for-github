@@ -25,5 +25,7 @@ COPY README.md README.md
 
 RUN poetry install
 
+ENV AIDER_DISABLE_PLAYWRIGHT=true
+
 
 ENTRYPOINT ["python", "/app/src/gemini_for_github/main.py"]

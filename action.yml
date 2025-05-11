@@ -55,20 +55,45 @@ branding:
   color: "blue"
 
 runs:
-  using: docker
-  image: Dockerfile
-  env:
-    GEMINI_API_KEY: ${{ inputs.gemini_api_key }}
-    GITHUB_TOKEN: ${{ inputs.github_token }}
-    GITHUB_OWNER: ${{ inputs.github_owner }}
-    GITHUB_REPO: ${{ inputs.github_repository }}
-    GITHUB_REPO_ID: ${{ inputs.github_repo_id }}
-    GITHUB_ISSUE_NUMBER: ${{ inputs.github_issue_number }}
-    GITHUB_PR_NUMBER: ${{ inputs.github_pr_number }}
-    GEMINI_MODEL: ${{ inputs.model }}
-    ACTIVATION_RESTRICTIONS: ${{ inputs.activation_restrictions }}
-    CONFIG_FILE: ${{ inputs.config_file }}
-    TOOL_RESTRICTIONS: ${{ inputs.tool_restrictions }}
-    COMMAND_RESTRICTIONS: ${{ inputs.command_restrictions }}
-    DEBUG: ${{ inputs.debug }}
-    USER_QUESTION: ${{ inputs.user_question }}
+  using: "composite"
+  steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        ref: main
+        fetch-depth: 0
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install Poetry
+      run: |
+        curl -sSL https://install.python-poetry.org | python3 -
+
+    - name: Install dependencies
+      run: |
+        poetry install
+
+    - name: Run Gemini Action
+      env:
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
+        GITHUB_ISSUE_NUMBER: ${{ github.event.issue.number }}
+        USER_QUESTION: ${{ github.event.comment.body }}
+      run: |
+        poetry run python -m src.gemini_for_github.main 
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
+        github-pr-number: ${{ github.event.pull_request.number }}
+        github-issue-number: ${{ github.event.issue.number }}
+        tool-restrictions: ${{ inputs.tool_restrictions }}
+        command-restrictions: ${{ inputs.command_restrictions }}
+        activation-restrictions: ${{ inputs.activation_restrictions }}
+        config-file: ${{ inputs.config_file }}
+        model: ${{ inputs.model }}
+        debug: ${{ inputs.debug }}
+        user-question: ${{ inputs.user_question }}

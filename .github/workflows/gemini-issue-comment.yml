@@ -1,4 +1,4 @@
-name: Gemini Action on Issue Comment
+name: Test Gemini Action on Issue Comment
 
 on:
   issue_comment:
@@ -7,28 +7,15 @@ on:
 jobs:
   run_gemini_action:
     runs-on: ubuntu-latest
+    name: Dev Gemini Action
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install Poetry
-        run: pip install poetry
-
-      - name: Install dependencies
-        run: poetry install
-
       - name: Run Gemini Action CLI
-        run: |
-          poetry run python src/gemini_for_github/main.py \
-            --github-owner ${{ github.repository_owner }} \
-            --github-repo ${{ github.event.repository.name }} \
-            --github-issue-number ${{ github.event.issue.number }} \
-            --user-question "${{ github.event.comment.body }}"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        uses: ./
+        with:
+          github-issue-number: ${{ github.event.issue.number }}
+          user-question: ${{ github.event.comment.body }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          gemini-api-key: ${{ secrets.GEMINI_API_KEY }}

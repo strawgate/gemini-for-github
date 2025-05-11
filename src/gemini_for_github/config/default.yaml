@@ -10,7 +10,6 @@ globally_allowed_tools:
   # - Tool name
   - get_pull_request_diff
   - create_pr_review
-  - clone_repository
   - get_issue_body
   - get_issue_comments
   - create_issue_comment
@@ -44,7 +43,7 @@ system_prompt: |
   If you believe the user or developer is incorrect, you should not tell them they are wrong without double checking the facts. When you respond 
   you should present your findings, with copies of code or other evidence, and explain how they contradict the user's or developer's statement.
 
-  You will always clone the repository before you start investigating.
+  You will never clone the repository, it is already cloned and available to you in your working directory.
   
   Unless the codebase is irrelevant to the ask, you will never respond without having read code from the codebase.
 
@@ -81,7 +80,6 @@ commands:
     example_flow: |
       - read issue "I'm having trouble with the login page"
       - read comments on the issue
-      - clone_repository
       - review codebase
         - list out the files in the repository
         - read available documentation
@@ -107,7 +105,6 @@ commands:
     example_flow: |
       - read issue "I'm having trouble with the login page"
       - read comments on the issue
-      - clone_repository
       - review codebase
         - list out the files in the repository
         - read available documentation
@@ -143,7 +140,6 @@ commands:
     example_flow: |
       - read issue "I'm having trouble with the login page"
       - read comments on the issue
-      - clone_repository
       - review codebase
         - list out the files in the repository
         - read available documentation

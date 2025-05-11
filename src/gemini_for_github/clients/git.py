@@ -1,9 +1,8 @@
 from collections.abc import Callable
-from pathlib import Path
 
 from git import Remote, RemoteReference, Repo
 
-from gemini_for_github.errors.git import GitBranchExistsError, GitCloneError, GitNewBranchError, GitPushError
+from gemini_for_github.errors.git import GitBranchExistsError, GitNewBranchError, GitPushError
 from gemini_for_github.shared.logging import BASE_LOGGER
 
 logger = BASE_LOGGER.getChild("git")
@@ -14,25 +13,16 @@ class GitClient:
     A client to invoke Git for code modifications.
     """
 
-
-    def __init__(self, repo: str, repo_path: str = "."):
-        self.repo_owner_name = repo
-        self.repo_path = Path(repo_path)
-
-        # self.head: Head | None = None
-
-    def set_safe_directory(self):
-        """
-        Set the safe directory for the Git client.
-        """
-        self.repo.git.config("safe.directory", "*")
+    def __init__(self, repo_path: str = "."):
+        self.repo: Repo = Repo(repo_path)
+        self.origin: Remote = self.repo.remotes.origin
+        self.starting_branch: str = self.repo.active_branch.name
 
     def get_tools(self) -> dict[str, Callable]:
         """Get the tools available to the Git client."""
         return {
             "new_branch": self.new_branch,
             "push_current_branch": self.push_current_branch,
-            "clone_repository": self.clone_repository,
         }
 
     def return_to_starting_branch(self):
@@ -41,21 +31,6 @@ class GitClient:
         """
         logger.info(f"Returning to starting branch: {self.starting_branch}")
         self.repo.head.reference = self.repo.create_head(self.starting_branch)
-
-    def clone_repository(self, branch: str = "main"):
-        """
-        Clones a repository from a given URL.
-        """
-        logger.info(f"Cloning repository from {self.repo_owner_name} to {self.repo_path}")
-        try:
-            self.repo = Repo.clone_from(f"https://github.com/{self.repo_owner_name}", self.repo_path / branch, branch=branch)
-            self.origin: Remote = self.repo.remotes.origin
-            self.starting_branch: str = self.repo.active_branch.name
-        except Exception as e:
-            msg = f"Error cloning repository: {e}"
-            logger.exception(msg)
-            raise GitCloneError(msg) from e
-
 
     def new_branch(self, name: str):
         """

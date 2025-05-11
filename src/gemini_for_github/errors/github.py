@@ -1,3 +1,6 @@
+"""Custom exceptions for GitHub API client operations."""
+
+
 class GithubClientError(Exception):
     """Base class for all errors related to the GitHub client."""
 
@@ -47,3 +50,11 @@ class GithubClientPRDiffGetError(GithubClientError):
 
 class GithubClientRepositoryGetError(GithubClientError):
     """Error raised when a repository cannot be retrieved."""
+
+
+class GithubClientIssueGetError(GithubClientError):
+    """Error raised when an issue cannot be retrieved."""
+
+
+class GithubClientPRGetError(GithubClientError):
+    """Error raised when a PR cannot be retrieved."""

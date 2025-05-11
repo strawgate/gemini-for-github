@@ -1,5 +1,5 @@
-
 FROM python:3.12
+
 
 ENV CONFIG_FILE="/app/src/gemini_for_github/config/default.yaml"
 
@@ -12,6 +12,9 @@ ENV PATH="$POETRY_HOME/bin:$PATH"
 
 RUN curl -sSL https://install.python-poetry.org | python3 -
 
+RUN mkdir -p /github/workspace
+
+RUN git config --system --add safe.directory /github/workspace
 
 WORKDIR /app
 # Copy the entrypoint script
@@ -21,5 +24,7 @@ COPY poetry.lock poetry.lock
 COPY README.md README.md
 
 RUN poetry install
+
+ENV AIDER_DISABLE_PLAYWRIGHT=true
 
 ENTRYPOINT ["python", "/app/src/gemini_for_github/main.py"]

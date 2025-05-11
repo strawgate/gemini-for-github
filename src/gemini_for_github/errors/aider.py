@@ -1,3 +1,6 @@
+"""Custom exceptions for Aider client operations."""
+
+
 class AiderError(Exception):
     """
     A custom exception for Aider errors.

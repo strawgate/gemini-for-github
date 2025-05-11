@@ -20,6 +20,7 @@ from gemini_for_github.errors.github import (
     GithubClientPRReviewCreateError,
     GithubClientPRReviewLimitError,
     GithubClientRepositoryGetError,
+    GithubClientIssueSearchError,
 )
 from gemini_for_github.shared.logging import BASE_LOGGER
 

@@ -32,6 +32,8 @@ class AiderClient:
             main_model=self.model,
             io=io,
         )
+        self.coder.verbose = True
+        
 
     def get_tools(self) -> dict[str, Callable]:
         """Get the tools available to the Aider client."""
@@ -49,7 +51,7 @@ class AiderClient:
         Returns:
             A string containing the results of the Aider execution.
         """
-        logger.info(f"Invoking Aider in {self.root} with prompt: {prompt[:100]}...")
+        logger.info(f"Invoking Aider in {self.root}, cwd: {Path.cwd()} with prompt: {prompt[:100]}...")
 
         try:
             result = self.coder.run(with_message=prompt)

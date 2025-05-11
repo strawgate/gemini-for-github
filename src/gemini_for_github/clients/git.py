@@ -2,7 +2,7 @@ from collections.abc import Callable
 
 from git import Remote, RemoteReference, Repo
 
-from gemini_for_github.errors.git import GitBranchExistsError
+from gemini_for_github.errors.git import GitBranchExistsError, GitNewBranchError, GitPushError
 from gemini_for_github.shared.logging import BASE_LOGGER
 
 logger = BASE_LOGGER.getChild("git")
@@ -46,14 +46,25 @@ class GitClient:
             logger.info(msg)
             raise GitBranchExistsError(msg)
 
-        self.repo.head.reference = self.repo.create_head(name)
-        rem_ref = RemoteReference(self.repo, f"refs/remotes/{self.origin.name}/{name}")
-        self.repo.head.reference.set_tracking_branch(rem_ref)
-        self.repo.head.reference.checkout()
+        try:
+            self.repo.head.reference = self.repo.create_head(name)
+            rem_ref = RemoteReference(self.repo, f"refs/remotes/{self.origin.name}/{name}")
+            self.repo.head.reference.set_tracking_branch(rem_ref)
+            self.repo.head.reference.checkout()
+        except Exception as e:
+            msg = f"Error creating new branch: {e}"
+            logger.exception(msg)
+            raise GitNewBranchError(msg) from e
+
 
     def push(self):
         """
         Pushes the given branch to the origin.
         """
         logger.info("Pushing branch to origin")
-        self.origin.push()
+        try:
+            self.origin.push()
+        except Exception as e:
+            msg = f"Error pushing branch to origin: {e}"
+            logger.exception(msg)
+            raise GitPushError(msg) from e

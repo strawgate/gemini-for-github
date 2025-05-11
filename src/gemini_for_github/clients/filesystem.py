@@ -73,17 +73,33 @@ class FilesystemClient:
 
     def get_directory_info(
         self,
-        path: str,
+        relative_path: str,
         levels: int = 1,
         exclude_hidden: bool = True,
         exclude_globs: Union[list[str], None] = None,  # noqa: UP007
         include_globs: Union[list[str], None] = None,  # noqa: UP007
     ) -> DirectoryInfo:
-        logger.info(f"Getting directory info for {path} with levels {levels}, exclude_hidden {exclude_hidden}, exclude_globs {exclude_globs}, include_globs {include_globs}")
-        p = Path(path)
+        """Get the directory info for a given relative path.
+
+        Args:
+            relative_path: The relative path to the directory to get the info for.
+            levels: The number of levels to include in the directory info.
+            exclude_hidden: Whether to exclude hidden files. You must disable this to see gitignore and other hidden files.
+            exclude_globs: A list of globs to exclude from the directory info.
+            include_globs: A list of globs to include in the directory info.
+
+        Returns:
+            The directory info for the given relative path.
+        """
+        logger.info(f"Getting directory info for {relative_path} with levels {levels}, exclude_hidden {exclude_hidden}, exclude_globs {exclude_globs}, include_globs {include_globs}")
+        p = Path(relative_path)
         if not p.is_dir():
-            msg = f"Directory {path} is not a directory"
+            msg = f"Directory {relative_path} is not a directory"
             raise FilesystemNotFoundError(msg)
+        
+        if not p.is_relative_to(self.root):
+            msg = f"Directory {relative_path} is not a child of the root directory"
+            raise FilesystemOutsideRootError(msg)
 
         children = [child for child in p.iterdir() if not child.name.startswith(".")] if exclude_hidden else list(p.iterdir())
 

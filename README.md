@@ -4,10 +4,11 @@ This project provides a command-line interface (CLI) tool to interact with GitHu
 
 ## Features
 
-- Interact with GitHub issues and pull requests.
-- Utilize the Gemini API for natural language processing and code analysis.
-- Integrate with MCP servers for extended capabilities.
-- Command selection based on user input and configured commands.
+- AI-powered assistance for GitHub workflows (code reviews, issue analysis, code understanding).
+- Integration with GitHub events and the Gemini AI model.
+- Processing of context from PR diffs or issue bodies.
+- Triggering actions based on user comments and predefined commands.
+- Potential for making code changes via integration with tools like Aider.
 
 ## Installation
 
@@ -15,7 +16,7 @@ This project provides a command-line interface (CLI) tool to interact with GitHu
 
 ## Configuration
 
-The application can be configured using a YAML file. A default configuration file is located at `./src/gemini_for_github/config/default.yaml`.
+The application can be configured using a YAML file. A default configuration file is located at [`./src/gemini_for_github/config/default.yaml`](src/gemini_for_github/config/default.yaml).
 
 Key configuration options include:
 
@@ -23,8 +24,9 @@ Key configuration options include:
 - `globally_allowed_tools`: Tools that are available to all commands.
 - `mcp_servers`: Configuration for connecting to various MCP servers.
 - `commands`: Definitions of available commands, including their prompts and allowed tools.
+- `system_prompt`: The base prompt used for the AI model.
 
-Environment variables can also be used for configuration, particularly for sensitive information like API keys. Refer to `src/gemini_for_github/cli.py` for the list of supported environment variables.
+Environment variables can also be used for configuration, particularly for sensitive information like API keys and GitHub credentials. Refer to [`src/gemini_for_github/cli.py`](src/gemini_for_github/cli.py) for the list of supported environment variables.
 
 ## Usage
 
@@ -43,13 +45,6 @@ python -m gemini_for_github --config-file /path/to/your/config.yaml --user-quest
 ```
 
 Refer to the `src/gemini_for_github/cli.py` for a full list of command-line options.
-
-## Code Review Notes
-
-Based on a high-level review, the codebase is well-structured. Areas for potential improvement include:
-
-- Refactoring the main `cli` function in `src/gemini_for_github/main.py` to reduce complexity.
-- Removing commented-out sample code in `src/gemini_for_github/clients/mcp.py`.
 
 ## Contributing
 

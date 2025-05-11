@@ -20,8 +20,8 @@ class AiderClient:
         self.root = root
 
         io = InputOutput(yes=True)
-        self.model = Model(model)
-        self.coder = Coder.create(
+        self.model = Model(f"gemini/{model}")
+        self.coder: Coder = Coder.create(
             main_model=self.model,
             io=io,
         )

@@ -99,11 +99,11 @@ async def _initialize_mcp_servers(config_file: ConfigFile) -> tuple[list[MCPServ
 async def _select_command(user_question: str, commands: list[Command], genai_client: GenAIClient) -> Command:
     """Selects the most appropriate command based on the user's question."""
     system_prompt = f"""
-    You are a GitHub based AI Agent. You receive plain text commands from the user and you need to determine which command, if any
-    should be executed to help the user.
+    You are a GitHub based AI Agent. You receive plain text questions from the user and you need to determine which command, if any 
+    most closely matches the user's request.
 
-    Available Commands:
-    {"- " + chr(10).join([f"{cmd.name}: {cmd.description}" for cmd in commands])}
+    Available Commands and when they are appropriate to use:
+    {"- " + chr(10).join([f"{cmd.name}: Appropriate when the developer asks you to {cmd.description}" for cmd in commands])}
 
     Respond with nothing other than the name (key) of the command that most closely matches the user's request.
     """

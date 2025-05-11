@@ -122,4 +122,5 @@ class FilesystemClient:
             self.get_file_info(str(child)) if child.is_file() else self.get_directory_info(str(child), levels - 1) for child in p.iterdir()
         ]
 
+        logger.info(f"Directory {relative_path} has {children_count} children")
         return DirectoryInfo(path=str(p.relative_to(self.root)), children=children, children_count=children_count)

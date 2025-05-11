@@ -83,8 +83,9 @@ class GitClient:
 
         if overwrite and Path(self.repo_dir).exists():
             shutil.rmtree(self.repo_dir)
+            os.makedirs(self.repo_dir)
 
-        with self.error_handler("cloning repository", f"repository URL: {self.repo_url}, branch: {branch}", GitCloneError):
+        with self.error_handler("cloning repository", f"repository URL: {self.owner_repo}, branch: {branch}", GitCloneError):
             self.repo = Repo.clone_from(self.repo_url, self.repo_dir, branch=branch)
             self.origin = self.repo.remotes.origin
             os.chdir(self.repo_dir)

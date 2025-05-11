@@ -144,7 +144,7 @@ async def _execute_command(system_prompt: str, user_prompts: list[str], genai_cl
     """Executes the selected command."""
 
     logger.info("Calling Gemini for prompt execution")
-    final_response = await genai_client.generate_content(system_prompt, user_prompts, tools=tools)  # type: ignore
+    final_response = await genai_client.generate_content(system_prompt, user_prompts, tools=tools, check_completion=True)  # type: ignore
     logger.info(f"Gemini believes it has completed the task: {final_response}")
 
 

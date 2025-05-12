@@ -139,6 +139,22 @@ class GitHubAPIClient:
 
         return "\n".join(file.patch for file in files)
 
+    def get_test_failures(self, pull_number: int) -> str:
+        """Get test failure information for a pull request.
+
+        This method is a placeholder and will eventually interact with the
+        GitHub Checks API or download test artifacts to get actual test
+        failure details.
+
+        Args:
+            pull_number: Pull request number
+
+        Returns:
+            A string containing placeholder test failure information.
+        """
+        # Placeholder implementation
+        return f"Test failure information for PR {pull_number}: No test failures found (placeholder)"
+
     def create_pr_review(self, pull_number: int, body: str, event: str = "COMMENT") -> bool:
         """Create a review on a pull request.
 

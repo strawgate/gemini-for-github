@@ -22,5 +22,6 @@ jobs:
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          github_issue_number: ${{ github.event.issue.number }}
+          github_pr_number: ${{ github.event.issue.number }}
           user_question: ${{ github.event.comment.body }}
+          command_restrictions: "pr_code_review,update_pr_with_code,add_suggestion_to_pr,research,update_pr_with_docs"

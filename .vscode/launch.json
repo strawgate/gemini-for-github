@@ -28,7 +28,7 @@
                "--github-issue-number",
                "6",
                "--user-question",
-               "/gemini please make a pr to add an ascii cat, there already is one but the cat is not big enough and not smiling"
+               "/gemini let's solve this issue differently -- make a pr to add an ascii doc"
           ],
           "cwd": "${workspaceFolder}/action_testing",
           "console": "integratedTerminal",

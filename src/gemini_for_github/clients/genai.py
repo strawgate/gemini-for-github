@@ -1,5 +1,7 @@
+import asyncio
 from collections.abc import Callable
-from typing import Any
+from enum import Enum
+from typing import Any, Literal
 
 from google.api_core.retry import if_transient_error
 from google.api_core.retry_async import AsyncRetry
@@ -8,25 +10,35 @@ from google.genai.errors import ClientError, ServerError
 from google.genai.types import (
     Content,
     ContentListUnion,
-    ContentListUnionDict,
+    ContentUnion,
+    FunctionCall,
     FunctionCallingConfig,
+    FunctionCallingConfigMode,
+    FunctionDeclaration,
+    FunctionResponse,
     GenerateContentConfig,
     GenerateContentResponse,
     GoogleSearch,
     HarmBlockThreshold,
     HarmCategory,
+    Part,
     SafetySetting,
     ThinkingConfig,
+    Tool,
     ToolConfig,
-    Part,
-    ToolListUnion,
-    Candidate
 )
+from pydantic import BaseModel, TypeAdapter
 
+from gemini_for_github.errors.genai import (
+    GenAITaskUnknownStatusError,
+    GenAIToolFunctionError,
+)
 from gemini_for_github.shared.logging import BASE_LOGGER
 
 QUOTA_EXCEEDED_ERROR_CODE = 429
 MODEL_OVERLOADED_ERROR_CODE = 503
+
+MAX_ITERATIONS = 10
 
 
 def is_retryable(e) -> bool:
@@ -45,6 +57,28 @@ def is_retryable(e) -> bool:
 logger = BASE_LOGGER.getChild("genai")
 
 
+class GenerationMode(Enum):
+    HYBRID = FunctionCallingConfigMode.AUTO
+    TOOL_CALLING = FunctionCallingConfigMode.ANY
+
+
+type GenAITaskResult = GenAITaskFailure | GenAITaskSuccess
+
+
+class GenAITaskFailure(BaseModel):
+    success: Literal[False] = False
+    task_details: str
+    failure_details: str
+    response: GenerateContentResponse
+
+
+class GenAITaskSuccess(BaseModel):
+    success: Literal[True] = True
+    task_details: str
+    completion_details: str
+    response: GenerateContentResponse
+
+
 class GenAIClient:
     """
     A client for interacting with Google's Generative AI models (e.g., Gemini).
@@ -52,6 +86,7 @@ class GenAIClient:
     """
 
     request_counter: int = 0
+    declared_tools: dict[str, tuple[Tool, Callable[..., Any]]]
 
     def __init__(self, api_key: str, model: str = "gemini-2.5-flash-preview-04-17", temperature: float = 0.2, thinking: bool = True):
         """Initialize the GenAI client.
@@ -67,36 +102,140 @@ class GenAIClient:
         self.model: str = model
         self.temperature = temperature
         self.thinking = thinking
+        self.declared_tools = {}
+        self.native_tools: dict[str, Tool] = {
+            "google_search": GoogleSearch(), # type: ignore
+        }
+        self.tool_call_history = []
+
+        self.register_tool("report_completion", self.report_completion)
+        self.register_tool("report_failure", self.report_failure)
+
+    def report_completion(self, task_details: str, completion_details: str) -> GenAITaskSuccess:
+        """Reporting completion indicates that the model has completed the task. The model should only
+        call this tool when it is sure it has completed the user's original task.
+
+        Args:
+            task_details: Details about the task the user requested.
+            completion_details: Details about how the model completed that task from the user.
+
+        Returns:
+            GenAITaskSuccess: A success response.
+        """
+        msg = "Not implemented"
+        raise NotImplementedError(msg)
+
+    def report_failure(self, task_details: str, failure_details: str) -> GenAITaskFailure:
+        """Reporting failure indicates that the model has failed to complete the task. The model should only
+        call this tool when it is sure it has failed to complete the user's original task.
+
+        Args:
+            task_details: Details about the task the user requested.
+            failure_details: Details about how the model failed to complete that task from the user.
+
+        Returns:
+            GenAITaskFailure: A failure response.
+        """
+        msg = "Not implemented"
+        raise NotImplementedError(msg)
+
+    def get_tool_call_history(self) -> list[str]:
+        return self.tool_call_history
+
+    def register_tool_with_declaration(self, name: str, function: Callable[..., Any], function_declaration: FunctionDeclaration):
+        tool = Tool(function_declarations=[function_declaration])
+        self.declared_tools[name] = (tool, function)
+
+    def add_native_tool(self, name: str, tool: Tool):
+        self.native_tools[name] = tool
+
+    def register_tool(self, name: str, function: Callable[..., Any]):
+        schema = TypeAdapter(function).json_schema()
+        schema.pop("additionalProperties")
+
+        self.register_tool_with_declaration(
+            name,
+            function,
+            FunctionDeclaration(
+                name=name,
+                description=function.__doc__,
+                parameters=schema,  # type: ignore
+            ),
+        )
 
     def _debug(self, msg: str):
         logger.debug(f"Request {self.request_counter}: {msg}")
 
-    def get_tools(self) -> dict[str, Callable]:
-        google_search = GoogleSearch()
-        return {
-            "google_search": google_search,  # type: ignore
-        }
-
-    @AsyncRetry(predicate=is_retryable)
-    async def generate_content(
-        self,
-        system_prompt: str,
-        user_prompts: list[str],
-        tools: ToolListUnion,
-        check_completion: bool = False
-    ) -> str:
-        """Generate content using the AI model.
+    async def _handle_function_call(self, function_name: str, function_args: dict[str, Any] | None) -> FunctionResponse:
+        """Handle a function call from the model and return the response.
 
         Args:
-            system_prompt: System prompt.
-            user_prompts: A list of user prompts or a dictionary of content parts.
-            tools: Optional list of Tool objects available to the model.
+            function_call: The function call object from the model
+            tools: The available tools for the model to use
 
         Returns:
-            Dictionary containing the generated response
+            FunctionResponse: The response from the function call
         """
+        tool_function: Callable[..., Any]
+        _, tool_function = self.declared_tools[function_name]
 
-        safety_settings: list[SafetySetting] = [
+        function_args = function_args or {}
+
+        try:
+            if asyncio.iscoroutinefunction(tool_function):
+                result = await tool_function(**function_args)
+            else:
+                result = tool_function(**function_args)
+
+        except Exception as e:
+            msg = f"Error executing function {function_name}: {e}"
+            logger.exception(msg)
+            raise GenAIToolFunctionError(msg) from e
+
+        return FunctionResponse(name=function_name, response={"result": result})
+
+    def _handle_completion(self, args: dict[str, Any] | None, response: GenerateContentResponse) -> GenAITaskSuccess:
+        if not args:
+            msg = "No arguments provided for completion function call"
+            logger.error(msg)
+            raise GenAITaskUnknownStatusError(msg)
+
+        task_details = args.get("task_details")
+        completion_details = args.get("completion_details")
+
+        if not task_details or not completion_details:
+            msg = "Task details and completion details are required"
+            logger.error(msg)
+            raise GenAITaskUnknownStatusError(msg)
+
+        return GenAITaskSuccess(
+            task_details=task_details,
+            completion_details=completion_details,
+            response=response,
+        )
+
+    def _handle_failure(self, args: dict[str, Any] | None, response: GenerateContentResponse) -> GenAITaskFailure:
+        if not args:
+            msg = "No arguments provided for failure function call"
+            logger.error(msg)
+            raise GenAITaskUnknownStatusError(msg)
+
+        task_details = args.get("task_details")
+        failure_details = args.get("failure_details")
+
+        if not task_details or not failure_details:
+            msg = "Task details and failure details are required"
+            logger.error(msg)
+            raise GenAITaskUnknownStatusError(msg)
+
+        return GenAITaskFailure(
+            task_details=task_details,
+            failure_details=failure_details,
+            response=response,
+        )
+
+    def _get_safety_settings(self) -> list[SafetySetting]:
+        return [
             SafetySetting(
                 category=HarmCategory.HARM_CATEGORY_HARASSMENT,
                 threshold=HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
@@ -115,90 +254,129 @@ class GenAIClient:
             ),
         ]
 
-        self.request_counter += 1
+    def _detect_function_call(self, response: GenerateContentResponse) -> FunctionCall | None:
+        if response.candidates and len(response.candidates) > 0:
+            candidate = response.candidates[0]
 
-        thinking_config = ThinkingConfig(thinking_budget=2048) if self.thinking else None
+            if not candidate.content or not candidate.content.parts:
+                return None
 
-        generation_config = GenerateContentConfig(
+            for part in candidate.content.parts:
+                if not part.function_call:
+                    continue
+                return part.function_call
+
+        return None
+
+    def _get_generate_content_config(self, system_prompt: str, tools: list[Tool] | None = None) -> GenerateContentConfig:
+        safety_settings = self._get_safety_settings()
+
+        return GenerateContentConfig(
             temperature=self.temperature,
             max_output_tokens=4096,
-            #safety_settings=safety_settings,
-            tools=tools,
+            tools=tools,  # type: ignore
+            safety_settings=safety_settings,
             system_instruction=system_prompt,
-            # stop_sequences=["Stop."],
-            thinking_config=thinking_config,
+            thinking_config=ThinkingConfig(thinking_budget=2048) if self.thinking else None,
             tool_config=ToolConfig(
-                function_calling_config=FunctionCallingConfig(
-                    # mode=FunctionCallingConfigMode.ANY,
-                )
+                function_calling_config=FunctionCallingConfig(mode=FunctionCallingConfigMode.ANY),
             ),
         )
 
-        
+    def get_allowed_tools(self, tool_names: list[str]) -> list[tuple[str, Tool]]:
+        allowed_tools = []
+        for name in tool_names:
+            if name in self.declared_tools:
+                allowed_tools.append((name, self.declared_tools[name][0]))
+            elif name in self.native_tools:
+                allowed_tools.append((name, self.native_tools[name]))
+            else:
+                raise ValueError(f"Tool {name} not found")
+        return allowed_tools
 
-        # self._debug(f"Generation config: {generation_config}")
-        self._debug(f"User prompts: {user_prompts}")
+    @AsyncRetry(predicate=is_retryable)
+    async def _get_completion(
+        self,
+        system_prompt: str,
+        contents: ContentListUnion,
+        tools: list[Tool],
+    ) -> GenerateContentResponse:
+        generation_config = self._get_generate_content_config(system_prompt, tools)
 
-        content_list: list[Content] = [
-            Content(role="user", parts=[Part(text=user_prompt)])
-            for user_prompt in user_prompts
-        ]
+        self._debug(f"System prompt: {system_prompt}")
+        self._debug(f"Contents: {contents}")
 
-        response: GenerateContentResponse = await self.client.models.generate_content(
+        return await self.client.models.generate_content(
             model=self.model,
-            contents=content_list,
+            contents=contents,
             config=generation_config,
         )
 
-        self._debug(f"Model response: {response.text}")
-
-        if check_completion:
-
-            if response.candidates and len(response.candidates) > 0:
-                candidate: Candidate = response.candidates[0]
-                if content := candidate.content:
-                    content_list.append(content)
-
-            if response.automatic_function_calling_history and len(response.automatic_function_calling_history) > 0:
-                for tool_call in response.automatic_function_calling_history:
-                    content_list.append(tool_call)
-    
-
-            content_list.append(Content(role="model", parts=[
-                Part(
-                    text="I will now double check I have completed my task. I will now answer two simple questions. Was I asked to comment on an issue or make a pull request? Did I comment on an issue or make a pull request? If not, I will do so now.")
-            ]))
-
-            logger.info("Asking Gemini if it thinks it completed its work.")
-            response: GenerateContentResponse = await self.client.models.generate_content(
-                model=self.model,
-                contents=content_list,
-                config=generation_config,
-            )
-
-            logger.info(f"Gemini says: {response.text}")
-
-        if response.automatic_function_calling_history and len(response.automatic_function_calling_history) > 0:
-            self._log_tool_calls(response.automatic_function_calling_history)
-
-        return response.text or ""
-
-    def _log_tool_calls(self, calling_history: list[Content]):
-        """
-        Logs the details of function calls made by the model during content generation.
+    async def perform_task(self, system_prompt: str, user_prompts: list[str], allowed_tools: list[str]) -> GenAITaskResult:
+        """Perform a task using the AI model.
 
         Args:
-            calling_history: A list of Content objects representing the history of tool calls.
+            system_prompt: System prompt.
+            user_prompts: A list of user prompts or a dictionary of content parts.
+            tools: Optional list of Tool objects available to the model.
+            check_completion: Whether to check if the model completed its task.
+
+        Returns:
+            str: The generated response text
         """
-        for tool_call in calling_history:
-            if not tool_call.parts:
-                continue
 
-            for part in tool_call.parts:
-                if not part.function_call:
-                    continue
+        content_list: ContentUnion = [
+            Content(
+                role="user",
+                parts=[Part(text=user_prompt)],
+            )
+            for user_prompt in user_prompts
+        ]  # type: ignore
 
-                self._debug(f"Function Call: {part.function_call.name}({part.function_call.args})")
+        iteration = 0
 
-                if part.function_response:
-                    self._debug(f"Function Response: {part.function_response}")
+        provided_tool_names: list[str]
+        provided_tools: list[Tool]
+
+        provided_tool_names, provided_tools = zip(
+            *self.get_allowed_tools([*allowed_tools, "report_completion", "report_failure", *self.native_tools.keys()]), strict=True
+        )
+
+        logger.info(f"Performing task with provided tools: {provided_tool_names}")
+
+        while iteration < MAX_ITERATIONS:
+            logger.info(f"Model completion iteration {iteration}")
+            response = await self._get_completion(system_prompt=system_prompt, contents=content_list, tools=provided_tools)  # type: ignore
+
+            logger.debug(f"Model completion response: {response}")
+
+            function_call = self._detect_function_call(response)
+
+            if not function_call:
+                logger.info("No function call detected")
+                break
+
+            logger.info(f"Function call detected: {function_call.name} with args: {function_call.args}")
+
+            self.tool_call_history.append(function_call.name)
+
+            if not function_call.name:
+                msg = "Function call name is required"
+                logger.error(msg)
+                raise GenAITaskUnknownStatusError(msg)
+
+            if function_call.name == "report_completion":
+                return self._handle_completion(function_call.args, response)
+            if function_call.name == "report_failure":
+                return self._handle_failure(function_call.args, response)
+
+            function_response = await self._handle_function_call(function_call.name, function_call.args)
+
+            content_list = [
+                *list(content_list),  # type: ignore
+                Content(role="model", parts=[Part(function_call=function_call)]),
+                Content(role="user", parts=[Part(function_response=function_response)]),
+            ]
+            iteration += 1
+
+        return response

@@ -6,7 +6,6 @@ globally_allowed_tools:
   - offer_code
   - create_pr_review
   - get_pull_request
-  - clone_repository
   - get_issue_with_comments
   - create_issue_comment
   - folder_contents
@@ -26,6 +25,8 @@ system_prompt: |
   Users and customers are unable to activate you. If you are activated, it's because a developer on the project has asked something of you.
   If the developer asked you to propose a solution, you should consider all of the pieces of the codebase that you will need to review in order
   to propose an accurate solution.
+
+  The repository has already been cloned and the relevant branch has already been checked out.
   
   # Things you should never do
   Never:
@@ -58,7 +59,8 @@ system_prompt: |
 
   # How you succeed
   You are not done with your work until you either create a comment on an issue or create a pull request. If you stop
-  in the middle of your expected flow you are not successful.
+  in the middle of your expected flow you are not successful. You will be thorough in your investigation you will look
+  at more code or documentation than is necessary to complete the task. If you have access to internet search, you should use it.
 
   # How you stop
   You are only allowed to create 1 comment on an issue or 1 pull request. You can sometimes do both, for example
@@ -83,6 +85,28 @@ commands:
   #     - commit_code
   #     - search_code
   #     - analyze_code
+  - name: "research"
+    description: "Research a topic and provide a detailed explanation of the topic."
+    prompt: |
+      You are being asked to research a topic. You should search the web for relevant information.
+      You should then post a comment on the issue with your findings. If you used sources from the web,
+      you should cite them in your comment. You will be thorough in your research and will look at many
+      sources to provide the best possible answer. You will not pretend you looked at a source if you did not.
+
+      On GitHub issue number: $github_issue_number -- the developer has asked: $user_question
+
+      A research always ends with you posting a comment on the issue with your findings.
+    example_flow: |
+      - read issue with comments "I wonder if there is a way to..."
+      - research
+        - search the web for relevant information
+      - create_issue_comment
+        - "I've researched the topic and found the following information..."
+      - stop (return no response)
+    allowed_tools:
+      - google_search
+      - search_issues
+      - get_web_page
 
   - name: "investigate_issue"
     description: "Investigate a Github issue and provide a detailed explanation of the issue and the steps to address it."
@@ -95,7 +119,6 @@ commands:
       An investigate always ends with you posting a comment on the issue with your findings.
     example_flow: |
       - read issue and comments from Github
-      - clone_repository
       - review codebase 
         - list out the files in the repository
         - read available documentation
@@ -107,9 +130,10 @@ commands:
     allowed_tools:
       - google_search
       - search_issues
+      - get_web_page
 
   - name: "propose_solution_for_issue"
-    description: "Propose a solution for a Github issue."
+    description: "Propose a solution for a Github issue. If a user is asking for a PR but there is no discussion of a solution in the issue, you should propose a solution."
     prompt: |
       You are being asked to propose a solution for a Github issue. You should thoroughly review the issue, assume the 
       role of a developer who is responding to an issue created by a customer. You will then read the relevant parts of the codebase
@@ -124,7 +148,6 @@ commands:
       THEN, stop generating any further output or calling any further tools.
     example_flow: |
       - read issue with comments "I'm having trouble with the login page"
-      - clone_repository
       - review codebase (simple issues)
         - list out the files in the repository
         - read available documentation
@@ -137,6 +160,7 @@ commands:
     allowed_tools:
       - google_search
       - search_issues
+      - get_web_page
 
   - name: "add_suggestion_to_pr"
     description: "Add a suggestion to an existing pull request."
@@ -149,7 +173,6 @@ commands:
       A suggestion always ends with you posting a comment on the pull request with your findings.
     example_flow: |
       - read pull request
-      - clone_repository
       - review codebase (simple issues)
         - list out the files in the repository
         - read available documentation
@@ -164,17 +187,16 @@ commands:
       - google_search
 
   - name: "update_pr_with_code"
-    description: "Update an existing pull request with code as requested by the developer."
+    description: "Update a pre-existing pull request with code as requested by the developer."
     prompt: |
-      You are being asked to update a pull request with code. You should read the pull request, clone the branch,
+      You are being asked to update an existing pull request with code. You should read the pull request, clone the branch,
       update the code, and push the changes to the branch.
 
       You should then post a comment to the pull request with a summary of the changes you made
 
-      On GitHub pull request number: $github_issue_number -- the developer has asked: $user_question
+      On GitHub pull request number: $github_pr_number -- the developer has asked: $user_question
     example_flow: |
       - get_pull_request
-      - clone_repository using the pull request branch
       - write_code
       - push_current_branch
       - create_pull_request_comment
@@ -226,7 +248,6 @@ commands:
 
     example_flow: |
       - read issue with comments "I'm having trouble with the login page"
-      - clone_repository
       - new_branch
       - write_code
       - push_current_branch
@@ -235,18 +256,52 @@ commands:
       - create_issue_comment
         - "I've created a pull request for this issue. PR #123456"
       - stop (return no response)
+    
+  - name: "pr_code_review"
+    description: "Review a pull request and provide feedback on the code."
+    prompt: |
+      You are being asked to review a pull request and provide feedback on the code. You should read the pull request and the codebase to provide feedback on the code.
+      You should then post a comment on the pull request with your findings. You are looking for general code quality issues,
+      design issues, and any other issues you believe are important to the project. You are looking for edge cases the developer didn't consider, documentation
+      that is missing, or needs to be updated,and any other issues you believe are important to the project.
+
+      On GitHub pull request number: $github_issue_number -- the developer has asked: $user_question
+
+      A pr code review always ends with you posting a comment on the pull request with your findings.
+      
+  - name: "update_pr_with_docs"
+    description: "Update a pull request with documentation."
+    prompt: |
+      You are being asked to update a pull request with documentation. You should scoure the code in the PR and all documentation and find
+      any places that need to be updated. You should then update the documentation.
+
+      On GitHub pull request number: $github_pr_number -- the developer has asked: $user_question
+
+      An update pr with docs always ends with you updating the PR with the latest documentation. If you notice
+      any other issues, you should not fix them, but instead include them when you post a comment on the pull request.
+    example_flow: |
+      - get_pull_request
+      - write_code
+      - push_current_branch
+      - create_pull_request_comment
+        - "I've updated the pull request with the latest documentation. I also noticed that..."
+      - stop (return no response)
     allowed_tools:
-    - write_code
-    - create_pull_request
-    - new_branch
-    - push_current_branch
-    - file_create
-    - file_append
-    - file_erase
-    - file_move
-    - file_delete
-    - folder_delete
-    - folder_move
+      - write_code
+      - get_pull_request
+      
+  - name: "whole_repo_code_review"
+    description: "Review the entire codebase and provide feedback on the code."
+    prompt: |
+      You are being asked to review the entire codebase and provide feedback on the code. You should read the entire codebase (every file) to provide feedback on the code.
+      You should then post a comment on the pull request with your findings. You are looking for general code quality issues,
+      design issues, and any other issues you believe are important to the project. You are looking for edge cases the developer didn't consider, documentation
+      that is missing, or needs to be updated, and any other issues you believe are important to the project.
+
+      On GitHub repository: $github_repository -- the developer has asked: $user_question
+
+      A whole repo code review always ends with you posting a comment on the pull request with your findings.
+
   - name: "kindly_reject_the_user_request"
     description: "A developer has specifically asked you to kindly reject the user's request. You will never choose this command without being explicitly asked to do so."
     prompt: |

@@ -24,3 +24,4 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           github_issue_number: ${{ github.event.issue.number }}
           user_question: ${{ github.event.comment.body }}
+          command_restrictions: "research,investigate,propose_solution_for_issue,whole_repo_code_review,create_pr_from_suggestion"

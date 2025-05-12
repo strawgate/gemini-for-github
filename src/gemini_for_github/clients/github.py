@@ -91,6 +91,18 @@ class GitHubAPIClient:
             "search_issues": self.search_issues,
         }
 
+    def get_default_branch(self) -> str:
+        """Get the default branch for the repository."""
+        with self.error_handler("getting default branch", f"repository id: {self.repo_id}", GithubClientPRGetError):
+            repository = self.github.get_repo(self.repo_id)
+            return repository.default_branch
+
+    def get_branch_from_pr(self, pull_number: int) -> str:
+        """Get the branch name from a pull request."""
+        with self.error_handler("getting branch from pull request", f"pull request number: {pull_number}", GithubClientPRGetError):
+            repository = self.github.get_repo(self.repo_id)
+            return repository.get_pull(pull_number).head.ref
+
     def get_pull_request(self, pull_number: int) -> dict[str, Any]:
         """Get a pull request."""
         with self.error_handler("getting pull request", f"pull request number: {pull_number}", GithubClientPRGetError):

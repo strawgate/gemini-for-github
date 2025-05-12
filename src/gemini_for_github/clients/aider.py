@@ -34,8 +34,27 @@ class AiderClient:
         return {
             "write_code": self.write_code,
             "offer_code": self.offer_code_diff,
+            "get_repo_map": self.get_repo_map,
         }
 
+    def get_repo_map(self) -> str:
+        """Get the repo map for the Aider client."""
+
+        io = InputOutput(yes=True)
+
+        repo = GitRepo(io, [], str(self.root), models=[self.model])
+        self.coder: Coder = Coder.create(
+            main_model=self.model,
+            io=io,
+            repo=repo,
+        )
+
+        repo_map = self.coder.get_repo_map(force_refresh=True)
+
+        if repo_map is None:
+            raise AiderError("Failed to get repo map")
+        
+        return repo_map
 
     def offer_code_diff(self, prompt: str) -> str:
         """

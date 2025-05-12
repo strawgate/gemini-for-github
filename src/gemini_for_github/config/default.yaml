@@ -14,6 +14,9 @@ globally_allowed_tools:
   - get_web_page
 # Command prompts
 # Note: Command prompts can be restricted by the CLI.
+globally_prerun_tools:
+- get_repo_map
+- read_readmes
 
 system_prompt: |
   # Who you are
@@ -127,6 +130,7 @@ commands:
       - create_issue_comment
         - "I've reviewed the issue and the codebase. I believe the problem is caused by..."
       - stop
+
     allowed_tools:
       - google_search
       - search_issues
@@ -298,7 +302,7 @@ commands:
       design issues, and any other issues you believe are important to the project. You are looking for edge cases the developer didn't consider, documentation
       that is missing, or needs to be updated, and any other issues you believe are important to the project.
 
-      On GitHub repository: $github_repository -- the developer has asked: $user_question
+      The developer has specifically said: $user_question
 
       A whole repo code review always ends with you posting a comment on the pull request with your findings.
 

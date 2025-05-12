@@ -6,12 +6,32 @@ from pathlib import Path
 from string import Template
 
 import asyncclick
+from gemini_for_github.clients.project import ProjectClient
 import yaml
 from pydantic import ValidationError
-
+from google.genai.types import (
+    Content,
+    ContentListUnion,
+    ContentUnion,
+    FunctionCall,
+    FunctionCallingConfig,
+    FunctionCallingConfigMode,
+    FunctionDeclaration,
+    FunctionResponse,
+    GenerateContentConfig,
+    GenerateContentResponse,
+    GoogleSearch,
+    HarmBlockThreshold,
+    HarmCategory,
+    Part,
+    SafetySetting,
+    ThinkingConfig,
+    Tool,
+    ToolConfig,
+)
 from gemini_for_github.clients.aider import AiderClient
 from gemini_for_github.clients.filesystem import FileOperations, FolderOperations
-from gemini_for_github.clients.genai import GenAIClient, GenAITaskResult, GenAITaskSuccess
+from gemini_for_github.clients.gemini import GenAIClient, GenAITaskResult, GenAITaskSuccess
 from gemini_for_github.clients.git import GitClient
 from gemini_for_github.clients.github import GitHubAPIClient
 from gemini_for_github.clients.mcp import MCPServer
@@ -107,12 +127,17 @@ async def _select_command(user_question: str, commands: list[Command], genai_cli
     """
 
     user_prompt = f"""
-    User Request: **{user_question}**
+    User request to identify the best command to use: **{user_question}**
     """
 
-    logger.info(f"Calling Gemini for command selection... of {user_question}. Allowed commands: {commands}")
+    content_list = [
+        genai_client.new_model_content("Ok, I understand, i'm not solving the problem, just picking the best command to use."),
+        genai_client.new_user_content(user_prompt),
+    ]
 
-    if response := await genai_client.perform_task(system_prompt, [user_prompt], allowed_tools=["get_issue_with_comments"]):
+    logger.info(f"Calling Gemini for command selection... of {user_question}. Allowed commands: {', '.join([cmd.name for cmd in commands])}")
+
+    if response := await genai_client.perform_task(system_prompt, content_list, allowed_tools=["get_issue_with_comments"]):
         
         if isinstance(response, GenAITaskSuccess):
             command_selection_response = response.task_details
@@ -135,10 +160,10 @@ async def _select_command(user_question: str, commands: list[Command], genai_cli
     raise CommandNotSelectedError(msg)
 
 
-async def _execute_command(system_prompt: str, user_prompts: list[str], genai_client: GenAIClient, tools: list[str]) -> GenAITaskResult:
+async def _execute_command(system_prompt: str, content_list: list[Content], genai_client: GenAIClient, tools: list[str]) -> GenAITaskResult:
     """Executes the selected command."""
-    logger.info("Calling Gemini for prompt execution")
-    return await genai_client.perform_task(system_prompt, user_prompts, allowed_tools=tools)
+    logger.info(f"Calling Gemini for prompt execution. Content list contains {len(content_list)} items")
+    return await genai_client.perform_task(system_prompt, content_list, allowed_tools=tools)
 
 def prepare_repository(git_client: GitClient, github_client: GitHubAPIClient, pr_number: int | None = None):
     """Prepares the repository for the command."""
@@ -213,6 +238,8 @@ async def cli(
         web_client = WebClient()
         genai_client = await _initialize_genai_client(gemini_api_key, model, thinking)
 
+        project_client = ProjectClient()
+
         # Register tools with GenAI client
         for name, func in github_client.get_tools().items():
             genai_client.register_tool(name, func)
@@ -226,6 +253,8 @@ async def cli(
             genai_client.register_tool(name, func)
         for name, func in web_client.get_tools().items():
             genai_client.register_tool(name, func)
+        for name, func in project_client.get_tools().items():
+            genai_client.register_tool(name, func)
 
         command = await _select_command(user_question, config.commands, genai_client)
 
@@ -238,19 +267,29 @@ async def cli(
             context["github_pr_number"] = github_pr_number
         if user_question:
             context["user_question"] = user_question
+    
+        content_list: list = []
 
-        user_prompt = []
-
-        if command.example_flow:
-            user_prompt.append(f"\nExample Flow for resolving this request: {command.example_flow}")
+        if command.prerun_tools:
+            content_list.append(genai_client.new_model_content("Before I get started with the user's request, I'm going to get some background information."))
+            for tool in command.prerun_tools:
+                content_list.append(genai_client.new_model_function_call(FunctionCall(name=tool, args={})))
+                result = await genai_client._handle_function_call(tool, {})
+                content_list.append(genai_client.new_model_function_response(FunctionResponse(name=tool, response=result.response)))
+            content_list.append(genai_client.new_model_content("I've got the background information I need. Let's get started on the user's request."))
 
         template_string = Template(command.prompt)
-        user_prompt.append(template_string.substitute(context))
+        content_list.append(genai_client.new_user_content(template_string.substitute(context)))
+
+        if command.example_flow:
+            content_list.append(genai_client.new_model_content("What flow should I follow for answering this request?"))
+            content_list.append(genai_client.new_user_content(f"\nExample Flow for resolving this request: {command.example_flow}"))
+            content_list.append(genai_client.new_model_content("I've got the example flow. Let's get started on the user's request."))
 
         system_prompt = config.system_prompt
         logger.info(f"Answering user question: {user_question}")
 
-        final_response = await _execute_command(system_prompt, user_prompt, genai_client, command.allowed_tools)
+        final_response = await _execute_command(system_prompt, content_list, genai_client, command.allowed_tools)
 
         if isinstance(final_response, GenAITaskSuccess):
             logger.info(f"Gemini believes it has completed the task: {final_response.task_details}: {final_response.completion_details}")

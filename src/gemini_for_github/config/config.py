@@ -36,7 +36,7 @@ class ConfigFileCommandEntry(BaseModel):
     example_flow: str | None = Field(
         None, description="An illustrative example of how this command might be used or the sequence of actions it performs."
     )
-
+    prerun_tools: list[str] = Field(default_factory=list, description="A list of tool names that this command is permitted to use.")
     @model_validator(mode="after")
     def only_one_prompt_source(self) -> Self:
         if not self.prompt and not self.prompt_file:
@@ -75,11 +75,12 @@ class ConfigFileCommandEntry(BaseModel):
         Returns:
             A new ConfigFileCommandEntry instance with the further restricted list of allowed_tools.
         """
-        intersection = set(self.allowed_tools) & set(only_allow_these_tools)
+        allowed_tools_intersection = set(self.allowed_tools) & set(only_allow_these_tools)
+        prerun_tools_intersection = set(self.prerun_tools) & set(only_allow_these_tools)
 
-        logger.debug(f"Applying tool restrictions to command {self.name}: {intersection}")
+        logger.debug(f"Applying tool restrictions to command {self.name}: {allowed_tools_intersection}")
 
-        return self.model_copy(update={"allowed_tools": list(intersection)})
+        return self.model_copy(update={"allowed_tools": list(allowed_tools_intersection), "prerun_tools": list(prerun_tools_intersection)})
 
 
 class ConfigFile(BaseModel):
@@ -90,6 +91,9 @@ class ConfigFile(BaseModel):
     )
     globally_allowed_tools: list[str] = Field(
         default_factory=list, description="A baseline list of tool names permitted for use by any command."
+    )
+    globally_prerun_tools: list[str] = Field(
+        default_factory=list, description="A baseline list of tool names permitted for use by any command before running."
     )
     mcp_servers: list[ConfigFileMCPServerEntry] = Field(
         default_factory=list, description="Definitions for MCP servers to be made available."
@@ -113,6 +117,9 @@ class Command(BaseModel):
     example_flow: str | None = Field(
         None, description="An illustrative example of how this command might be used or the sequence of actions it performs."
     )
+    prerun_tools: list[str] = Field(
+        default_factory=list, description="The final list of tool names that this command is permitted to use before running."
+    )
 
     @classmethod
     def from_config_file_command_entry(
@@ -120,6 +127,7 @@ class Command(BaseModel):
         config_file_command_entry: ConfigFileCommandEntry,
         additional_tools: list[str] | None = None,
         tool_restrictions: list[str] | None = None,
+        extra_prerun_tools: list[str] | None = None,
     ) -> Self:
         """
         Creates a processed Command instance from a raw ConfigFileCommandEntry.
@@ -151,11 +159,16 @@ class Command(BaseModel):
         if tool_restrictions:
             tools = [tool for tool in tools if tool in tool_restrictions]
 
+        prerun_tools = config_file_command_entry.prerun_tools or []
+        if extra_prerun_tools:
+            prerun_tools.extend(extra_prerun_tools)
+
         return cls(
             name=config_file_command_entry.name,
             description=config_file_command_entry.description,
             prompt=prompt,
             allowed_tools=tools,
+            prerun_tools=prerun_tools,
             example_flow=config_file_command_entry.example_flow,
         )
 
@@ -218,6 +231,7 @@ class Config(BaseModel):
                     cmd,
                     additional_tools=config_file.globally_allowed_tools,
                     tool_restrictions=tool_restrictions,
+                    extra_prerun_tools=config_file.globally_prerun_tools,
                 )
                 for cmd in config_file.commands
                 if not command_restrictions or cmd.name in command_restrictions

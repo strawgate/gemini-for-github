@@ -183,16 +183,16 @@ class GenAIClient:
 
         try:
             if asyncio.iscoroutinefunction(tool_function):
-                result = await tool_function(**function_args)
+                output = await tool_function(**function_args)
             else:
-                result = tool_function(**function_args)
+                output = tool_function(**function_args)
 
         except Exception as e:
             msg = f"Error executing function {function_name}: {e}"
             logger.exception(msg)
-            raise GenAIToolFunctionError(msg) from e
+            return FunctionResponse(name=function_name, response={"error": str(e)})
 
-        return FunctionResponse(name=function_name, response={"result": result})
+        return FunctionResponse(name=function_name, response={"output": output})
 
     def _handle_completion(self, args: dict[str, Any] | None, response: GenerateContentResponse) -> GenAITaskSuccess:
         if not args:
@@ -311,27 +311,43 @@ class GenAIClient:
             contents=contents,
             config=generation_config,
         )
+    
+    def new_user_content(self, user_prompt: str) -> Content:
+        return Content( 
+            role="user",
+            parts=[Part(text=user_prompt)],
+        )
+    
+    def new_model_content(self, model_prompt: str) -> Content:
+        return Content(
+            role="model",
+            parts=[Part(text=model_prompt)],
+        )
+    
+    def new_model_function_call(self, function_call: FunctionCall) -> Content:
+        return Content(
+            role="model",
+            parts=[Part(function_call=function_call)],
+        )
 
-    async def perform_task(self, system_prompt: str, user_prompts: list[str], allowed_tools: list[str]) -> GenAITaskResult:
+    def new_model_function_response(self, function_response: FunctionResponse) -> Content:
+        return Content(
+            role="model",
+            parts=[Part(function_response=function_response)],
+        )
+
+    async def perform_task(self, system_prompt: str, content_list: list[Content], allowed_tools: list[str]) -> GenAITaskResult:
         """Perform a task using the AI model.
 
         Args:
             system_prompt: System prompt.
-            user_prompts: A list of user prompts or a dictionary of content parts.
-            tools: Optional list of Tool objects available to the model.
+            content_list: A list of content parts.
+            allowed_tools: Optional list of Tool objects available to the model.
             check_completion: Whether to check if the model completed its task.
 
         Returns:
             str: The generated response text
         """
-
-        content_list: ContentUnion = [
-            Content(
-                role="user",
-                parts=[Part(text=user_prompt)],
-            )
-            for user_prompt in user_prompts
-        ]  # type: ignore
 
         iteration = 0
 

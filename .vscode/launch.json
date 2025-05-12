@@ -24,7 +24,6 @@
            "request": "launch",
            "program": "${workspaceFolder}/src/gemini_for_github/main.py",
            "args": [
-               "--debug",
                "--github-issue-number",
                "6",
                "--user-question",

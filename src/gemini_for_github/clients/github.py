@@ -86,6 +86,7 @@ class GitHubAPIClient:
             "create_pull_request": self.create_pull_request,
             "create_pull_request_comment": self.create_pull_request_comment,
             "search_issues": self.search_issues,
+            "get_test_failures": self.get_test_failures,
         }
 
     def get_default_branch(self) -> str:
@@ -105,6 +106,22 @@ class GitHubAPIClient:
         with self.error_handler("getting pull request", f"pull request number: {pull_number}", GeminiGithubClientPRGetError):
             repository = self.github.get_repo(self.repo_id)
             return repository.get_pull(pull_number).raw_data
+
+    def get_test_failures(self, pull_number: int) -> str:
+        """Get test failure information for a pull request.
+
+        This method is a placeholder and will eventually interact with the
+        GitHub Checks API or download test artifacts to get actual test
+        failure details.
+
+        Args:
+            pull_number: Pull request number
+
+        Returns:
+            A string containing placeholder test failure information.
+        """
+        # Placeholder implementation
+        return f"Test failure information for PR {pull_number}: No test failures found (placeholder)"
 
     def get_pull_request_diff(self, pull_number: int) -> str:
         """Get the diff for a pull request.

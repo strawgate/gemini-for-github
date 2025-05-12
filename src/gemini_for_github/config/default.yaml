@@ -12,6 +12,7 @@ globally_allowed_tools:
   - folder_contents
   - folder_read_all
   - file_read
+  - get_web_page
 # Command prompts
 # Note: Command prompts can be restricted by the CLI.
 

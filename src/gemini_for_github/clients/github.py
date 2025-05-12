@@ -130,12 +130,12 @@ class GitHubAPIClient:
 
         return "\n".join(file.patch for file in files)
 
-    def create_pr_review(self, pull_number: int | None = None, body: str, event: str = "COMMENT") -> bool:
+    def create_pr_review(self, body: str, pull_number: int | None = None, event: str = "COMMENT") -> bool:
         """Create a review on a pull request.
 
         Args:
-            pull_number: Optional pull request number. Uses the instance's default if None.
             body: Review body text
+            pull_number: Optional pull request number. Uses the instance's default if None.
             event: Review event type (e.g., "COMMENT", "APPROVE", "REQUEST_CHANGES")
 
         Returns:

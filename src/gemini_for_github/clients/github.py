@@ -69,9 +69,12 @@ class GitHubAPIClient:
             raise e from e
         except Exception as e:
             logger.exception(f"Unknown error occurred while {operation}: {details}")
-            if exception:
-                raise exception from e
-            raise GithubClientError(message=details or str(e)) from e
+            if exception and issubclass(exception, GithubClientError):
+                # Instantiate the provided exception type with the details message
+                raise exception(message=details) from e
+            else:
+                # Raise a generic GithubClientError if no specific exception type is provided or it's not a GithubClientError subclass
+                raise GithubClientError(message=details or str(e)) from e
 
     def get_repository(self) -> Repository:
         """Get the repository."""

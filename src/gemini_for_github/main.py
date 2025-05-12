@@ -62,9 +62,11 @@ async def _load_config(config_file_path: str, tool_restrictions: str | None, com
     return config, config_file
 
 
-async def _initialize_github_client(github_token: str, github_repo_id: int) -> GitHubAPIClient:
+async def _initialize_github_client(
+    github_token: str, github_repo_id: int, github_issue_number: int | None, github_pr_number: int | None
+) -> GitHubAPIClient:
     """Initializes and returns the GitHub API client."""
-    return GitHubAPIClient(token=github_token, repo_id=github_repo_id)
+    return GitHubAPIClient(token=github_token, repo_id=github_repo_id, issue_number=github_issue_number, pull_number=github_pr_number)
 
 
 async def _initialize_git_client(repo_dir: Path, github_token: str, owner_repo: str) -> GitClient:
@@ -167,17 +169,17 @@ async def _execute_command(system_prompt: str, content_list: list[Content], gena
     logger.info(f"Calling Gemini for prompt execution. Content list contains {len(content_list)} items")
     return await genai_client.perform_task(system_prompt, content_list, allowed_tools=tools)
 
-def prepare_repository(git_client: GitClient, github_client: GitHubAPIClient, pr_number: int | None = None):
+def prepare_repository(git_client: GitClient, github_client: GitHubAPIClient):
     """Prepares the repository for the command."""
 
     branch: str = github_client.get_default_branch()
 
-    if pr_number:
-        branch = github_client.get_branch_from_pr(pull_number=pr_number)
-        logger.info(f"Cloning repository {branch} for pull request {pr_number}")
+    if github_client.pull_number:
+        branch = github_client.get_branch_from_pr()
+        logger.info(f"Cloning repository {branch} for pull request {github_client.pull_number}")
     else:
         logger.info(f"Cloning repository {branch} for default branch")
-    
+
     git_client.clone_repository(branch=branch)
 
 
@@ -232,7 +234,7 @@ async def cli(
         config, _ = await _load_config(str(config_path), tool_restrictions, command_restrictions)
 
         # Initialize clients
-        github_client = await _initialize_github_client(github_token, github_repo_id)
+        github_client = await _initialize_github_client(github_token, github_repo_id, github_issue_number, github_pr_number)
         repo_dir = root_path / "repo"
         git_client = await _initialize_git_client(repo_dir, github_token, github_repo)
         file_operations, folder_operations = await _initialize_filesystem_client(root_path)
@@ -260,13 +262,13 @@ async def cli(
 
         command = await _select_command(user_question, config.commands, genai_client)
 
-        prepare_repository(git_client, github_client, github_pr_number)
+        prepare_repository(git_client, github_client)
 
         context = {}
-        if github_issue_number:
-            context["github_issue_number"] = github_issue_number
-        if github_pr_number:
-            context["github_pr_number"] = github_pr_number
+        if github_client.issue_number:
+            context["github_issue_number"] = github_client.issue_number
+        if github_client.pull_number:
+            context["github_pr_number"] = github_client.pull_number
         if user_question:
             context["user_question"] = user_question
     

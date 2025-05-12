@@ -33,16 +33,20 @@ class GitHubAPIClient:
     pull requests, and comments.
     """
 
-    def __init__(self, token: str, repo_id: int):
+    def __init__(self, token: str, repo_id: int, issue_number: int | None = None, pull_number: int | None = None):
         """Initialize the GitHub API client.
 
         Args:
             token: GitHub API token for authentication.
             repo_id: The numerical ID of the GitHub repository.
+            issue_number: The numerical ID of the GitHub issue (optional).
+            pull_number: The numerical ID of the GitHub pull request (optional).
         """
         auth = Auth.Token(token)
         self.github = Github(auth=auth)
         self.repo_id: int = repo_id
+        self.issue_number: int | None = issue_number
+        self.pull_number: int | None = pull_number
 
         self.issue_comment_counter: int = 0
         self.pr_create_counter: int = 0
@@ -100,70 +104,73 @@ class GitHubAPIClient:
             repository = self.github.get_repo(self.repo_id)
             return repository.default_branch
 
-    def get_branch_from_pr(self, pull_number: int) -> str:
+    def get_branch_from_pr(self) -> str:
         """Get the branch name from a pull request."""
-        with self.error_handler("getting branch from pull request", f"pull request number: {pull_number}", GithubClientPRGetError):
+        if self.pull_number is None:
+            raise ValueError("pull_number must be set to get branch from PR")
+        with self.error_handler("getting branch from pull request", f"pull request number: {self.pull_number}", GithubClientPRGetError):
             repository = self.github.get_repo(self.repo_id)
-            return repository.get_pull(pull_number).head.ref
+            return repository.get_pull(self.pull_number).head.ref
 
-    def get_pull_request(self, pull_number: int) -> dict[str, Any]:
+    def get_pull_request(self) -> dict[str, Any]:
         """Get a pull request."""
-        with self.error_handler("getting pull request", f"pull request number: {pull_number}", GithubClientPRGetError):
+        if self.pull_number is None:
+            raise ValueError("pull_number must be set to get a pull request")
+        with self.error_handler("getting pull request", f"pull request number: {self.pull_number}", GithubClientPRGetError):
             repository = self.github.get_repo(self.repo_id)
-            return repository.get_pull(pull_number).raw_data
+            return repository.get_pull(self.pull_number).raw_data
 
-    def get_pull_request_diff(self, pull_number: int) -> str:
+    def get_pull_request_diff(self) -> str:
         """Get the diff for a pull request.
-
-        Args:
-            pull_number: Pull request number
 
         Returns:
             String containing the diff
         """
-        with self.error_handler("getting pull request diff", f"pull request number: {pull_number}", GithubClientPRDiffGetError):
+        if self.pull_number is None:
+            raise ValueError("pull_number must be set to get pull request diff")
+        with self.error_handler("getting pull request diff", f"pull request number: {self.pull_number}", GithubClientPRDiffGetError):
             repository = self.github.get_repo(self.repo_id)
-            pull_request = repository.get_pull(pull_number)
+            pull_request = repository.get_pull(self.pull_number)
             files = pull_request.get_files()
 
         return "\n".join(file.patch for file in files)
 
-    def create_pr_review(self, pull_number: int, body: str, event: str = "COMMENT") -> bool:
+    def create_pr_review(self, body: str, event: str = "COMMENT") -> bool:
         """Create a review on a pull request.
 
         Args:
-            pull_number: Pull request number
             body: Review body text
             event: Review event type (e.g., "COMMENT", "APPROVE", "REQUEST_CHANGES")
 
         Returns:
             String containing the review information
         """
+        if self.pull_number is None:
+            raise ValueError("pull_number must be set to create a PR review")
         if self.pr_review_counter == 1:
             msg = "The model attempted to create more than one pull request review but only one is allowed. Model must stop."
             raise GithubClientPRReviewLimitError(msg)
 
-        with self.error_handler("creating pull request review", f"pull request number: {pull_number}", GithubClientPRReviewCreateError):
+        with self.error_handler("creating pull request review", f"pull request number: {self.pull_number}", GithubClientPRReviewCreateError):
             repository = self.github.get_repo(self.repo_id)
-            pull_request = repository.get_pull(pull_number)
+            pull_request = repository.get_pull(self.pull_number)
             pull_request.create_review(body=body, event=event)
 
         self.pr_review_counter += 1
 
         return True
 
-    def get_issue_with_comments(self, issue_number: int) -> dict[str, Any]:
+    def get_issue_with_comments(self) -> dict[str, Any]:
         """Get an issue title, body, tags, and comments.
-
-        Args:
-            issue_number: The number of the issue to get.
 
         Returns:
             A dictionary containing the issue title, body, tags, and comments.
         """
-        with self.error_handler("getting issue", f"issue number: {issue_number}", GithubClientIssueGetError):
+        if self.issue_number is None:
+            raise ValueError("issue_number must be set to get issue with comments")
+        with self.error_handler("getting issue", f"issue number: {self.issue_number}", GithubClientIssueGetError):
             repository = self.github.get_repo(self.repo_id)
-            issue = repository.get_issue(issue_number)
+            issue = repository.get_issue(self.issue_number)
             result = {
                 "title": issue.title,
                 "body": issue.body,
@@ -177,58 +184,57 @@ class GitHubAPIClient:
                     for comment in issue.get_comments()
                 ],
             }
-        logger.debug(f"Issue {issue_number}: {result}")
+        logger.debug(f"Issue {self.issue_number}: {result}")
         return result
 
-    def get_issue_body(self, issue_number: int) -> str:
+    def get_issue_body(self) -> str:
         """Get the body of an issue.
-
-        Args:
-            issue_number: Issue number
 
         Returns:
             String containing the issue body
         """
-        with self.error_handler("getting issue body", f"issue number: {issue_number}", GithubClientIssueBodyGetError):
+        if self.issue_number is None:
+            raise ValueError("issue_number must be set to get issue body")
+        with self.error_handler("getting issue body", f"issue number: {self.issue_number}", GithubClientIssueBodyGetError):
             repository = self.github.get_repo(self.repo_id)
-            issue = repository.get_issue(issue_number)
+            issue = repository.get_issue(self.issue_number)
             response = f"# {issue.title}\n\n{issue.body}"
-            logger.debug(f"Issue body for issue {issue_number}: {response.strip()}")
+            logger.debug(f"Issue body for issue {self.issue_number}: {response.strip()}")
             return response.strip()
 
-    def get_issue_comments(self, issue_number: int) -> list[dict[str, Any]]:
+    def get_issue_comments(self) -> list[dict[str, Any]]:
         """Get all comments on an issue.
-
-        Args:
-            issue_number: Issue number
 
         Returns:
             List of dictionaries containing comment information
         """
-        with self.error_handler("getting issue comments", f"issue number: {issue_number}", GithubClientIssueCommentsGetError):
+        if self.issue_number is None:
+            raise ValueError("issue_number must be set to get issue comments")
+        with self.error_handler("getting issue comments", f"issue number: {self.issue_number}", GithubClientIssueCommentsGetError):
             repository = self.github.get_repo(self.repo_id)
-            issue = repository.get_issue(issue_number)
+            issue = repository.get_issue(self.issue_number)
             return [comment.raw_data for comment in issue.get_comments()]
 
-    def create_issue_comment(self, issue_number: int, body: str) -> bool:
+    def create_issue_comment(self, body: str) -> bool:
         """Create a comment on an issue.
 
         Args:
-            issue_number: Issue number.
             body: Comment body text.
 
         Returns:
             A string confirming the comment creation and its ID.
         """
+        if self.issue_number is None:
+            raise ValueError("issue_number must be set to create an issue comment")
         if self.issue_comment_counter == 1:
             msg = "The model attempted to create more than one comment but only one is allowed. Model must stop."
             raise GithubClientCommentLimitError(msg)
 
         body_suffix = "\n\nThis is an automated response generated by a GitHub Action."
 
-        with self.error_handler("creating issue comment", f"issue number: {issue_number}", GithubClientIssueCommentCreateError):
+        with self.error_handler("creating issue comment", f"issue number: {self.issue_number}", GithubClientIssueCommentCreateError):
             repository = self.github.get_repo(self.repo_id)
-            issue = repository.get_issue(issue_number)
+            issue = repository.get_issue(self.issue_number)
             comment = issue.create_comment(body + body_suffix)
 
         self.issue_comment_counter += 1
@@ -237,19 +243,20 @@ class GitHubAPIClient:
 
         return True
 
-    def create_pull_request_comment(self, pull_number: int, body: str) -> bool:
+    def create_pull_request_comment(self, body: str) -> bool:
         """Create a comment on a pull request.
 
         Args:
-            pull_number: Pull request number
             body: Comment body text
 
         Returns:
             A string confirming the comment creation and its ID.
         """
-        with self.error_handler("creating pull request comment", f"pull request number: {pull_number}", GithubClientPRCommentCreateError):
+        if self.pull_number is None:
+            raise ValueError("pull_number must be set to create a pull request comment")
+        with self.error_handler("creating pull request comment", f"pull request number: {self.pull_number}", GithubClientPRCommentCreateError):
             repository = self.github.get_repo(self.repo_id)
-            issue = repository.get_issue(pull_number)
+            issue = repository.get_issue(self.pull_number)
             issue.create_comment(body)
 
         return True

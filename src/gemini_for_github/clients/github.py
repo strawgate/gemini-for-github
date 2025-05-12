@@ -250,6 +250,7 @@ class GitHubAPIClient:
 
         return True
 
+    # Implements the GitHub issue search tool discussed in issue #38
     def search_issues(self, query: str, owner: str, repo: str) -> list[dict[str, Any]]:
         """Search for issues using the GitHub Search API.
 

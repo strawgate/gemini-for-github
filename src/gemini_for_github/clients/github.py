@@ -71,7 +71,19 @@ class GitHubAPIClient:
             raise GeminiGithubClientError(message=details or str(e)) from e
 
     def get_repository(self) -> Repository:
-        """Get the repository."""
+        """
+        Retrieves the PyGithub `Repository` object for the configured `repo_id`.
+
+        Use this if you need direct access to the PyGithub `Repository` object
+        for operations not covered by the client's specific tool methods.
+
+        Returns:
+            Repository: The PyGithub `Repository` object.
+
+        Raises:
+            GeminiGithubClientRepositoryGetError: If the repository cannot be fetched (e.g., invalid ID, permissions).
+            GeminiGithubClientError: For other unexpected errors.
+        """
         with self.error_handler("getting repository", f"repository id: {self.repo_id}", GeminiGithubClientRepositoryGetError):
             return self.github.get_repo(self.repo_id)
 
@@ -89,31 +101,111 @@ class GitHubAPIClient:
         }
 
     def get_default_branch(self) -> str:
-        """Get the default branch for the repository."""
+        """
+        Retrieves the name of the default branch (e.g., 'main', 'master') for the repository.
+
+        Returns:
+            str: The name of the default branch.
+                 Example: "main"
+
+        Raises:
+            GeminiGithubClientRepositoryGetError: If the repository cannot be fetched.
+            GeminiGithubClientError: For other unexpected errors.
+        """
         with self.error_handler("getting default branch", f"repository id: {self.repo_id}", GeminiGithubClientPRGetError):
             repository = self.github.get_repo(self.repo_id)
             return repository.default_branch
 
     def get_branch_from_pr(self, pull_number: int) -> str:
-        """Get the branch name from a pull request."""
+        """
+        Retrieves the name of the head branch (the branch containing the changes) for a given pull request.
+
+        Args:
+            pull_number (int): The number of the pull request.
+
+        Returns:
+            str: The name of the head branch.
+                 Example: "feature/new-login"
+
+        Raises:
+            GeminiGithubClientPRGetError: If the pull request cannot be fetched (e.g., invalid number, permissions).
+            GeminiGithubClientError: For other unexpected errors.
+        """
         with self.error_handler("getting branch from pull request", f"pull request number: {pull_number}", GeminiGithubClientPRGetError):
             repository = self.github.get_repo(self.repo_id)
             return repository.get_pull(pull_number).head.ref
 
     def get_pull_request(self, pull_number: int) -> dict[str, Any]:
-        """Get a pull request."""
+        """
+        Retrieves the raw data for a specific pull request.
+
+        Use this to get detailed information about a pull request, including its title, body,
+        author, state, branches, etc., as provided by the GitHub API.
+
+        Args:
+            pull_number (int): The number of the pull request.
+
+        Returns:
+            dict[str, Any]: A dictionary representing the raw JSON data of the pull request
+                            returned by the GitHub API. The exact structure depends on the API version
+                            and response. Consult the GitHub API documentation for details.
+                            Example (simplified):
+                            ```json
+                            {
+                              "url": "https://api.github.com/repos/owner/repo/pulls/123",
+                              "id": 1,
+                              "number": 123,
+                              "state": "open",
+                              "title": "Add new feature",
+                              "user": { "login": "octocat", ... },
+                              "body": "This PR implements the feature.",
+                              "created_at": "2024-01-01T10:00:00Z",
+                              "head": { "ref": "feature-branch", ... },
+                              "base": { "ref": "main", ... },
+                              ...
+                            }
+                            ```
+
+        Raises:
+            GeminiGithubClientPRGetError: If the pull request cannot be fetched.
+            GeminiGithubClientError: For other unexpected errors.
+        """
         with self.error_handler("getting pull request", f"pull request number: {pull_number}", GeminiGithubClientPRGetError):
             repository = self.github.get_repo(self.repo_id)
             return repository.get_pull(pull_number).raw_data
 
     def get_pull_request_diff(self, pull_number: int) -> str:
-        """Get the diff for a pull request.
+        """
+        Retrieves the combined diff of all file changes included in a pull request.
+
+        Use this tool to get the code changes proposed in a specific pull request,
+        formatted as a standard diff string. This is often used as input for code review
+        or analysis tasks.
 
         Args:
-            pull_number: Pull request number
+            pull_number (int): The number of the pull request.
 
         Returns:
-            String containing the diff
+            str: A string containing the concatenated diffs (`.patch` attribute) for all files
+                 in the pull request.
+                 Example:
+                 ```diff
+                 --- a/file1.py
+                 +++ b/file1.py
+                 @@ -1,1 +1,2 @@
+                  print("hello")
+                 +print("python")
+
+                 --- a/file2.txt
+                 +++ b/file2.txt
+                 @@ -1 +1 @@
+                 -old line
+                 +new line
+                 ```
+
+        Raises:
+            GeminiGithubClientPRDiffGetError: If the pull request or its files cannot be fetched.
+            GeminiGithubClientError: For other unexpected errors.
         """
         with self.error_handler("getting pull request diff", f"pull request number: {pull_number}", GeminiGithubClientPRDiffGetError):
             repository = self.github.get_repo(self.repo_id)
@@ -123,15 +215,28 @@ class GitHubAPIClient:
         return "\n".join(file.patch for file in files)
 
     def create_pr_review(self, pull_number: int, body: str, event: str = "COMMENT") -> bool:
-        """Create a review on a pull request.
+        """
+        Creates a pull request review with a comment.
+
+        Use this tool to submit feedback on a pull request. It creates a single review
+        comment. Note: This client enforces a limit of **one** review creation per instance
+        to prevent accidental spamming.
 
         Args:
-            pull_number: Pull request number
-            body: Review body text
-            event: Review event type (e.g., "COMMENT", "APPROVE", "REQUEST_CHANGES")
+            pull_number (int): The number of the pull request to review.
+            body (str): The text content of the review comment.
+            event (str): The type of review event. Common values are:
+                         - "COMMENT": Submit general feedback without explicit approval/rejection. (Default)
+                         - "APPROVE": Approve the pull request.
+                         - "REQUEST_CHANGES": Request changes on the pull request.
 
         Returns:
-            String containing the review information
+            bool: True if the review was created successfully.
+
+        Raises:
+            GeminiGithubClientPRReviewLimitError: If a review has already been created by this client instance.
+            GeminiGithubClientPRReviewCreateError: If the review creation fails via the API (e.g., permissions, invalid PR number).
+            GeminiGithubClientError: For other unexpected errors.
         """
         if self.pr_review_counter == 1:
             msg = "The model attempted to create more than one pull request review but only one is allowed. Model must stop."
@@ -149,10 +254,15 @@ class GitHubAPIClient:
         return True
 
     def get_issue_with_comments(self, issue_number: int) -> dict[str, Any]:
-        """Get an issue title, body, tags, and comments.
+        """
+        Retrieves comprehensive details about a specific issue, including its comments.
+
+        Use this tool to get the title, main description (body), assigned labels (tags),
+        and all comments associated with a GitHub issue. This provides full context for
+        understanding the issue and its discussion.
 
         Args:
-            issue_number: The number of the issue to get.
+            issue_number (int): The number of the issue to retrieve.
 
         Returns:
             A dictionary containing the issue title, body, tags, and comments.
@@ -177,13 +287,24 @@ class GitHubAPIClient:
         return result
 
     def get_issue_body(self, issue_number: int) -> str:
-        """Get the body of an issue.
+        """
+        Retrieves the title and main body content of a specific issue.
+
+        Use this tool when you only need the primary description of the issue,
+        not the comments or other metadata.
 
         Args:
-            issue_number: Issue number
+            issue_number (int): The number of the issue.
 
         Returns:
-            String containing the issue body
+            str: A string containing the issue title and body, formatted with
+                 the title as a markdown heading.
+                 Example:
+                 "# Bug in login page\n\nUsers cannot log in with valid credentials."
+
+        Raises:
+            GeminiGithubClientIssueBodyGetError: If the issue or its body cannot be fetched.
+            GeminiGithubClientError: For other unexpected errors.
         """
         with self.error_handler("getting issue body", f"issue number: {issue_number}", GeminiGithubClientIssueBodyGetError):
             repository = self.github.get_repo(self.repo_id)
@@ -193,13 +314,30 @@ class GitHubAPIClient:
             return response.strip()
 
     def get_issue_comments(self, issue_number: int) -> list[dict[str, Any]]:
-        """Get all comments on an issue.
+        """
+        Retrieves all comments associated with a specific issue.
+
+        Use this tool when you need the discussion history of an issue, separate from
+        its main body.
 
         Args:
-            issue_number: Issue number
+            issue_number (int): The number of the issue.
 
         Returns:
-            List of dictionaries containing comment information
+            list[dict[str, Any]]: A list of dictionaries, where each dictionary represents
+                                  the raw data of a single comment as returned by the GitHub API.
+                                  Consult the GitHub API documentation for the comment object structure.
+                                  Example (simplified):
+                                  ```json
+                                  [
+                                    { "id": 1, "user": { "login": "user1" }, "body": "Comment 1", ... },
+                                    { "id": 2, "user": { "login": "user2" }, "body": "Comment 2", ... }
+                                  ]
+                                  ```
+
+        Raises:
+            GeminiGithubClientIssueCommentsGetError: If the issue or its comments cannot be fetched.
+            GeminiGithubClientError: For other unexpected errors.
         """
         with self.error_handler("getting issue comments", f"issue number: {issue_number}", GeminiGithubClientIssueCommentsGetError):
             repository = self.github.get_repo(self.repo_id)
@@ -207,14 +345,25 @@ class GitHubAPIClient:
             return [comment.raw_data for comment in issue.get_comments()]
 
     def create_issue_comment(self, issue_number: int, body: str) -> bool:
-        """Create a comment on an issue.
+        """
+        Creates a new comment on a specified GitHub issue.
+
+        Use this tool to add a comment to an ongoing issue discussion. A standard suffix
+        indicating the comment is automated is appended to the body. Note: This client
+        enforces a limit of **one** issue comment creation per instance to prevent
+        accidental spamming.
 
         Args:
-            issue_number: Issue number.
-            body: Comment body text.
+            issue_number (int): The number of the issue to comment on.
+            body (str): The text content of the comment.
 
         Returns:
-            A string confirming the comment creation and its ID.
+            bool: True if the comment was created successfully.
+
+        Raises:
+            GeminiGithubClientCommentLimitError: If a comment has already been created by this client instance.
+            GeminiGithubClientIssueCommentCreateError: If the comment creation fails via the API (e.g., permissions, invalid issue number).
+            GeminiGithubClientError: For other unexpected errors.
         """
         if self.issue_comment_counter == 1:
             msg = "The model attempted to create more than one comment but only one is allowed. Model must stop."
@@ -232,14 +381,22 @@ class GitHubAPIClient:
         return True
 
     def create_pull_request_comment(self, pull_number: int, body: str) -> bool:
-        """Create a comment on a pull request.
+        """
+        Creates a general comment on a specified pull request (not a review comment).
+
+        Use this tool to add a general comment to the pull request conversation thread.
+        This is different from creating a review or commenting on specific lines of code.
 
         Args:
-            pull_number: Pull request number
-            body: Comment body text
+            pull_number (int): The number of the pull request to comment on.
+            body (str): The text content of the comment.
 
         Returns:
-            A string confirming the comment creation and its ID.
+            bool: True if the comment was created successfully.
+
+        Raises:
+            GeminiGithubClientPRCommentCreateError: If the comment creation fails via the API (e.g., permissions, invalid PR number).
+            GeminiGithubClientError: For other unexpected errors.
         """
         with self.error_handler(
             "creating pull request comment", f"pull request number: {pull_number}", GeminiGithubClientPRCommentCreateError
@@ -251,15 +408,27 @@ class GitHubAPIClient:
         return True
 
     def search_issues(self, query: str, owner: str, repo: str) -> list[dict[str, Any]]:
-        """Search for issues using the GitHub Search API.
+        """
+        Searches for issues within the specified repository using GitHub's search syntax.
+
+        Use this tool to find issues matching specific criteria (keywords, labels, authors, etc.)
+        within the context of the repository defined by `owner` and `repo`.
 
         Args:
-            query: The search query string.
-            owner: The owner of the repository.
-            repo: The name of the repository.
+            query (str): The search query string, following GitHub's issue search syntax.
+                         Example: "is:open label:bug login error"
+            owner (str): The owner (username or organization) of the repository.
+            repo (str): The name of the repository.
 
         Returns:
-            A list of dictionaries containing issue information.
+            list[dict[str, Any]]: A list of dictionaries, where each dictionary represents
+                                  the raw data of an issue matching the search query, as
+                                  returned by the GitHub API. Consult the GitHub API documentation
+                                  for the issue object structure.
+
+        Raises:
+            GithubException: If the search API call fails (e.g., rate limiting, invalid query).
+            GeminiGithubClientError: For other unexpected errors.
         """
         full_query = f"{query} repo:{owner}/{repo}"
         logger.info(f"Searching issues with query: {full_query}")
@@ -268,16 +437,31 @@ class GitHubAPIClient:
         return [issue.raw_data for issue in issues]
 
     def create_pull_request(self, head_branch: str, base_branch: str, title: str, body: str) -> dict[str, Any]:
-        """Create a pull request using PyGithub.
+        """
+        Creates a new pull request in the configured repository.
+
+        Use this tool to propose merging changes from one branch (`head_branch`) into
+        another (`base_branch`). Note: This client enforces a limit of **one** pull request
+        creation per instance to prevent accidental duplicates.
 
         Args:
-            head_branch: The name of the branch where the changes were made.
-            base_branch: The name of the branch to merge the changes into.
-            title: The title of the pull request.
-            body: The body description of the pull request.
+            head_branch (str): The name of the branch containing the changes you want to merge.
+                               Example: "feature/add-widget"
+            base_branch (str): The name of the branch you want to merge the changes into.
+                               Often the default branch like "main" or "master".
+            title (str): The desired title for the pull request.
+            body (str): The description or summary of the changes in the pull request body.
 
         Returns:
-            A dictionary containing information about the created pull request.
+            dict[str, Any]: A dictionary representing the raw data of the newly created
+                            pull request, as returned by the GitHub API. Consult the GitHub API
+                            documentation for the pull request object structure.
+
+        Raises:
+            GeminiGithubClientPRLimitError: If a pull request has already been created by this client instance.
+            GeminiGithubClientPRCreateError: If the pull request creation fails via the API (e.g., permissions,
+                                             invalid branches, no difference between branches).
+            GeminiGithubClientError: For other unexpected errors.
         """
         if self.pr_create_counter == 1:
             msg = "The model attempted to create more than one pull request but only one is allowed. Stop."

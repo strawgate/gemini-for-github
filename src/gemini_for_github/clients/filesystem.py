@@ -185,13 +185,20 @@ class FileOperations:
 
     async def read(self, file_path: str) -> str:
         """
-        Reads the content of a file at the specified path.
+        Reads the entire content of a specified file.
+
+        Use this tool when you need to retrieve the full text content of a single file.
 
         Args:
-            file_path: The path of the file to read.
+            file_path: The relative or absolute path to the file to be read.
 
         Returns:
-            str: The content of the file.
+            str: The complete content of the file as a string.
+                 Example: "line1\nline2\n..."
+
+        Raises:
+            MCPFileNotFoundError: If the file at `file_path` does not exist.
+            MCPFileOperationError: For permission errors or other issues reading the file.
         """
         async with handle_file_errors(file_path):
             with open(file_path, encoding="utf-8") as f:
@@ -328,7 +335,7 @@ class FileReadSummary(BaseModel):
 
 class FolderOperations(MCPMixin):
     """
-    This class provides MCP tools to manipulate folders.
+    This class provides tools to manipulate folders.
 
     It includes methods for creating, listing contents, moving, deleting,
     and emptying folders, with integrated custom exception handling.
@@ -402,19 +409,27 @@ class FolderOperations(MCPMixin):
         self, folder_path: str, include: list[str], exclude: list[str], recurse: bool, bypass_default_exclusions: bool = False
     ) -> list:
         """
-        Lists the contents of a folder.
-         If you are listing items recursively, the include and exclude patterns will
-         apply to the relative path of the items. So to capture all files of a certain type
-         in a folder and its subfolders, you would use a pattern like `**/*.txt` for `include`.
+        Lists the contents (files and subdirectories) of a specified folder.
+
+        Use this tool to discover the items within a directory. It supports recursive listing
+        and filtering using glob patterns. Default exclusion patterns (like `.git`, `__pycache__`)
+        are applied unless `bypass_default_exclusions` is True.
 
         Args:
-            folder_path: The path of the folder to list.
-            include: A list of glob patterns to include specific files, applies to the relative path.
-            exclude: A list of glob pattern to exclude specific files, applies to the relative path.
-            recurse: If True, lists contents recursively.
+            folder_path: The relative or absolute path of the folder to list.
+            include: A list of glob patterns. Only items whose relative paths match any of these patterns are included. Use `["*"]` or `[]` to include everything initially. Example: `["*.py", "*.txt"]`. For recursive matching, use `**`, e.g., `["**/*.py"]`.
+            exclude: A list of glob patterns. Items whose relative paths match any of these patterns are excluded. Example: `["*.log", "temp/*"]`.
+            recurse: If True, lists contents of subdirectories recursively. If False, lists only the immediate contents.
+            bypass_default_exclusions: If True, ignores the built-in `list_folder_exclusions` (like `.git`, `__pycache__`). Defaults to False. Not recommended.
 
         Returns:
-            list: A list of items in the folder.
+            list[str]: A list of relative paths of the items found within the `folder_path` that match the criteria.
+                       Example (recursive): `['file1.txt', 'subdir/file2.py', 'subdir/nested/image.png']`
+                       Example (non-recursive): `['file1.txt', 'subdir']`
+
+        Raises:
+            MCPFolderNotFoundError: If `folder_path` does not exist or is not a directory.
+            MCPFolderOperationError: For permission errors or other issues listing the directory.
         """
         async with handle_folder_errors(folder_path):
             contents = []
@@ -451,22 +466,45 @@ class FolderOperations(MCPMixin):
         bypass_default_exclusions: bool = False,
     ) -> FileReadSummary:
         """
-        Provides the full contents (every character) of every file in a folder.
-         If you are listing items recursively, the include and exclude patterns will
-         apply to the relative path of the items. So to capture all files of a certain type
-         in a folder and its subfolders, you would use a pattern like `**/*.txt` for `include`.
+        Reads the content of multiple files within a specified folder, potentially recursively.
+
+        Use this tool to efficiently get the content of many files at once, applying include/exclude
+        filters and default exclusions (like binary files, temp files). It's useful for providing
+        broad context about a project or directory to an LLM.
 
         Args:
-            folder_path: The path of the folder to list.
-            include: A glob pattern to include specific files, applies to the relative path.
-            exclude: A glob pattern to exclude specific files, applies to the relative path.
-            recurse: If True, reads files recursively.
-            head: Number of lines to read from the start of each file (default is 0, meaning read all).
-            tail: Number of lines to read from the end of each file (default is 0, meaning read all).
-            bypass_default_exclusions: If True, skips the default exclusions for reading files.
+            folder_path: The relative or absolute path of the folder to read files from.
+            include: A list of glob patterns. Only files whose relative paths match any of these patterns are included. Example: `["**/*.py"]`.
+            exclude: A list of glob patterns. Files whose relative paths match any of these patterns are excluded. Example: `["*_test.py"]`.
+            recurse: If True, reads files in subdirectories recursively. If False, reads only files directly within `folder_path`.
+            head: If > 0, reads only the first `head` lines from each file. Overrides `tail`. Defaults to 0 (read all).
+            tail: If > 0 and `head` is 0, reads only the last `tail` lines from each file. Defaults to 0 (read all).
+            bypass_default_exclusions: If True, ignores the built-in `read_file_exclusions` (like `.pyc`, `.zip`). Defaults to False. Not recommended.
 
         Returns:
-            list[FileReadSuccess | FileReadError]: A list of results containing the file path and content or error.
+            FileReadSummary: An object summarizing the operation, containing:
+                - `total_files`: Number of files considered after include/exclude patterns.
+                - `skipped_files`: Number of files skipped due to default exclusions (if not bypassed).
+                - `errors`: A list of `FileReadError` objects for files that couldn't be read (e.g., permission denied, decoding errors).
+                - `results`: A list of `FileReadSuccess` objects, each containing the `file_path` (relative) and `content` of a successfully read file.
+                Example `FileReadSummary` (as JSON):
+                ```json
+                {
+                  "total_files": 5,
+                  "skipped_files": 1,
+                  "errors": [
+                    { "file_path": "bad_encoding.txt", "error": "'utf-8' codec can't decode byte..." }
+                  ],
+                  "results": [
+                    { "file_path": "main.py", "content": "import os\n\nprint('Hello')" },
+                    { "file_path": "utils/helper.py", "content": "def assist():\n  pass" }
+                  ]
+                }
+                ```
+
+        Raises:
+            MCPFolderNotFoundError: If `folder_path` does not exist or is not a directory.
+            MCPFolderOperationError: For permission errors accessing the top-level folder. Individual file read errors are captured in the `errors` list within the result.
         """
         async with handle_folder_errors(folder_path):
             files = await self.contents(folder_path, include, exclude, recurse, bypass_default_exclusions)
@@ -516,14 +554,21 @@ class FolderOperations(MCPMixin):
 
     async def move(self, source_path: str, destination_path: str) -> bool:
         """
-        Moves a folder from source to destination.
+        Moves or renames a folder (directory).
+
+        Use this tool to change the location or name of a directory and its contents.
 
         Args:
-            source_path: The current path of the folder.
-            destination_path: The new path where the folder should be moved.
+            source_path: The current relative or absolute path of the folder.
+            destination_path: The desired new relative or absolute path for the folder.
 
         Returns:
-            bool: True if the folder was moved successfully, False otherwise.
+            bool: Always returns True upon successful completion (exceptions are raised on failure).
+
+        Raises:
+            MCPFolderNotFoundError: If the `source_path` does not exist or is not a directory.
+            MCPFolderOperationError: For permission errors, if `destination_path` already exists,
+                                     or other issues during the move operation.
         """
         async with handle_folder_errors(source_path):
             os.rename(source_path, destination_path)
@@ -532,14 +577,25 @@ class FolderOperations(MCPMixin):
 
     async def delete(self, folder_path: str, recursive: bool = False) -> bool:
         """
-        Deletes a folder at the specified path.
+        Deletes a specified folder (directory).
+
+        Use this tool to permanently remove a directory. By default, it only deletes
+        empty directories. Use the `recursive` option to delete a directory and all
+        its contents. **Use recursion with caution!**
 
         Args:
-            folder_path: The path of the folder to delete.
-            recursive: If True, deletes the folder and all its contents recursively.
+            folder_path: The relative or absolute path of the folder to delete.
+            recursive: If True, deletes the folder and everything inside it.
+                       If False (default), only deletes the folder if it is empty.
 
         Returns:
-            bool: True if the folder was deleted successfully, False otherwise.
+            bool: Always returns True upon successful completion (exceptions are raised on failure).
+
+        Raises:
+            MCPFolderNotFoundError: If the `folder_path` does not exist.
+            MCPFolderOperationError: If the path points to a file, if the folder is not empty
+                                     and `recursive` is False, or for permission errors or
+                                     other issues during deletion.
         """
         async with handle_folder_errors(folder_path):
             if recursive:

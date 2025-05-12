@@ -111,29 +111,46 @@ class GenAIClient:
         self.register_tool("report_failure", self.report_failure)
 
     def report_completion(self, task_details: str, completion_details: str) -> GenAITaskSuccess:
-        """Reporting completion indicates that the model has completed the task. The model should only
-        call this tool when it is sure it has completed the user's original task.
+        """
+        Reports that the assigned task has been successfully completed.
+
+        This tool should *only*  be called when it has fully addressed the user's request
+        and no further actions are needed. This signals the end of the task execution flow.
 
         Args:
-            task_details: Details about the task the user requested.
-            completion_details: Details about how the model completed that task from the user.
+            task_details: A summary description of the original task assigned by the user.
+                          Example: "Refactor the authentication module."
+            completion_details: A description of how the task was completed and the final outcome.
+                                Example: "Refactored auth module to use JWT, updated tests, all passing."
 
         Returns:
-            GenAITaskSuccess: A success response.
+            GenAITaskSuccess: An object indicating successful task completion. This is typically
+                              handled internally by the client to stop the execution loop.
+                              (Note: This method actually raises NotImplementedError as it's meant
+                               to be intercepted by the calling logic, not executed directly).
         """
         msg = "Not implemented"
         raise NotImplementedError(msg)
 
     def report_failure(self, task_details: str, failure_details: str) -> GenAITaskFailure:
-        """Reporting failure indicates that the model has failed to complete the task. The model should only
-        call this tool when it is sure it has failed to complete the user's original task.
+        """
+        Reports that the assigned task could not be completed successfully.
+
+        Call this tool when it determines it cannot fulfill the user's request
+        due to errors, limitations, or ambiguities it cannot resolve. This signals an
+        unsuccessful end to the task execution flow.
 
         Args:
-            task_details: Details about the task the user requested.
-            failure_details: Details about how the model failed to complete that task from the user.
+            task_details: A summary description of the original task assigned by the user.
+                          Example: "Deploy the application to the staging server."
+            failure_details: A description of why the task failed.
+                             Example: "Deployment failed due to missing credentials in the environment."
 
         Returns:
-            GenAITaskFailure: A failure response.
+            GenAITaskFailure: An object indicating task failure. This is typically
+                              handled internally by the client to stop the execution loop.
+                              (Note: This method actually raises NotImplementedError as it's meant
+                               to be intercepted by the calling logic, not executed directly).
         """
         msg = "Not implemented"
         raise NotImplementedError(msg)
@@ -149,6 +166,20 @@ class GenAIClient:
         self.native_tools[name] = tool
 
     def register_tool(self, name: str, function: Callable[..., Any]):
+        """
+        Registers a Python function as a tool available to the LLM, automatically generating the schema.
+
+        This is the preferred method for registering most custom tools. It infers the tool's
+        description from the function's docstring and the parameter schema from its type hints
+        (using Pydantic's `TypeAdapter`).
+
+        Args:
+            name: The name the LLM will use to call this tool. Should match the Python function name
+                  unless there's a specific reason to differ.
+            function: The Python callable (function or method) to execute. Must have type hints
+                      for its arguments and a clear docstring explaining its purpose, arguments,
+                      and what it returns.
+        """
         schema = TypeAdapter(function).json_schema()
         schema.pop("additionalProperties")
 
@@ -378,13 +409,24 @@ class GenAIClient:
         """Perform a task using the AI model.
 
         Args:
-            system_prompt: System prompt.
-            content_list: A list of content parts.
-            allowed_tools: Optional list of Tool objects available to the model.
-            check_completion: Whether to check if the model completed its task.
+            system_prompt: The initial instructions or persona definition for the model.
+            content_list: A list of `google.genai.types.Content` objects representing the
+                          conversation history (user messages, previous model responses, tool calls/results).
+                          Typically starts with the initial user request.
+            allowed_tools: A list of strings specifying the names of the tools (registered via
+                           `register_tool` or `add_native_tool`) that the model is permitted
+                           to use for this specific task. The internal `report_completion` and
+                           `report_failure` tools are always implicitly added.
 
         Returns:
-            str: The generated response text
+            GenAITaskResult: Either a `GenAITaskSuccess` or `GenAITaskFailure` object,
+                             indicating the outcome reported by the model via the respective tools.
+
+        Raises:
+            GenAITaskUnknownStatusError: If the model finishes interacting (e.g., max iterations)
+                                         without calling `report_completion` or `report_failure`.
+            ValueError: If an unknown tool name is provided in `allowed_tools`.
+            Other exceptions from the underlying API calls or tool executions.
         """
 
         iteration = 0

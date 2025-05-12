@@ -48,9 +48,11 @@ async def _load_config(config_file_path: str, tool_restrictions: str | None, com
     return config, config_file
 
 
-async def _initialize_github_client(github_token: str, github_repo_id: int) -> GitHubAPIClient:
+async def _initialize_github_client(
+    github_token: str, github_repo_id: int, issue_number: int | None = None, pull_number: int | None = None
+) -> GitHubAPIClient:
     """Initializes and returns the GitHub API client."""
-    return GitHubAPIClient(token=github_token, repo_id=github_repo_id)
+    return GitHubAPIClient(token=github_token, repo_id=github_repo_id, issue_number=issue_number, pull_number=pull_number)
 
 
 async def _initialize_git_client(repo_dir: Path, github_token: str, owner_repo: str) -> GitClient:
@@ -222,7 +224,7 @@ async def cli(
         config, _ = await _load_config(str(config_path), tool_restrictions, command_restrictions)
 
         # Initialize clients
-        github_client = await _initialize_github_client(github_token, github_repo_id)
+        github_client = await _initialize_github_client(github_token, github_repo_id, github_issue_number, github_pr_number)
         repo_dir = root_path / "repo"
         git_client = await _initialize_git_client(repo_dir, github_token, github_repo)
         file_operations, folder_operations = await _initialize_filesystem_client(root_path)

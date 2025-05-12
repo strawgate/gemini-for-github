@@ -33,16 +33,20 @@ class GitHubAPIClient:
     pull requests, and comments.
     """
 
-    def __init__(self, token: str, repo_id: int):
+    def __init__(self, token: str, repo_id: int, issue_number: int | None = None, pull_number: int | None = None):
         """Initialize the GitHub API client.
 
         Args:
             token: GitHub API token for authentication.
             repo_id: The numerical ID of the GitHub repository.
+            issue_number: Optional default issue number to use for operations.
+            pull_number: Optional default pull request number to use for operations.
         """
         auth = Auth.Token(token)
         self.github = Github(auth=auth)
         self.repo_id: int = repo_id
+        self.issue_number: int | None = issue_number
+        self.pull_number: int | None = pull_number
 
         self.issue_comment_counter: int = 0
         self.pr_create_counter: int = 0
@@ -106,60 +110,72 @@ class GitHubAPIClient:
             repository = self.github.get_repo(self.repo_id)
             return repository.get_pull(pull_number).raw_data
 
-    def get_pull_request_diff(self, pull_number: int) -> str:
+    def get_pull_request_diff(self, pull_number: int | None = None) -> str:
         """Get the diff for a pull request.
 
         Args:
-            pull_number: Pull request number
+            pull_number: Optional pull request number. Uses the instance's default if None.
 
         Returns:
             String containing the diff
         """
-        with self.error_handler("getting pull request diff", f"pull request number: {pull_number}", GeminiGithubClientPRDiffGetError):
+        pr_num = pull_number if pull_number is not None else self.pull_number
+        if pr_num is None:
+            raise ValueError("Pull request number must be provided or set in the client.")
+
+        with self.error_handler("getting pull request diff", f"pull request number: {pr_num}", GeminiGithubClientPRDiffGetError):
             repository = self.github.get_repo(self.repo_id)
-            pull_request = repository.get_pull(pull_number)
+            pull_request = repository.get_pull(pr_num)
             files = pull_request.get_files()
 
         return "\n".join(file.patch for file in files)
 
-    def create_pr_review(self, pull_number: int, body: str, event: str = "COMMENT") -> bool:
+    def create_pr_review(self, pull_number: int | None = None, body: str, event: str = "COMMENT") -> bool:
         """Create a review on a pull request.
 
         Args:
-            pull_number: Pull request number
+            pull_number: Optional pull request number. Uses the instance's default if None.
             body: Review body text
             event: Review event type (e.g., "COMMENT", "APPROVE", "REQUEST_CHANGES")
 
         Returns:
             String containing the review information
         """
+        pr_num = pull_number if pull_number is not None else self.pull_number
+        if pr_num is None:
+            raise ValueError("Pull request number must be provided or set in the client.")
+
         if self.pr_review_counter == 1:
             msg = "The model attempted to create more than one pull request review but only one is allowed. Model must stop."
             raise GeminiGithubClientPRReviewLimitError(msg)
 
         with self.error_handler(
-            "creating pull request review", f"pull request number: {pull_number}", GeminiGithubClientPRReviewCreateError
+            "creating pull request review", f"pull request number: {pr_num}", GeminiGithubClientPRReviewCreateError
         ):
             repository = self.github.get_repo(self.repo_id)
-            pull_request = repository.get_pull(pull_number)
+            pull_request = repository.get_pull(pr_num)
             pull_request.create_review(body=body, event=event)
 
         self.pr_review_counter += 1
 
         return True
 
-    def get_issue_with_comments(self, issue_number: int) -> dict[str, Any]:
+    def get_issue_with_comments(self, issue_number: int | None = None) -> dict[str, Any]:
         """Get an issue title, body, tags, and comments.
 
         Args:
-            issue_number: The number of the issue to get.
+            issue_number: Optional issue number. Uses the instance's default if None.
 
         Returns:
             A dictionary containing the issue title, body, tags, and comments.
         """
-        with self.error_handler("getting issue", f"issue number: {issue_number}", GeminiGithubClientIssueGetError):
+        issue_num = issue_number if issue_number is not None else self.issue_number
+        if issue_num is None:
+            raise ValueError("Issue number must be provided or set in the client.")
+
+        with self.error_handler("getting issue", f"issue number: {issue_num}", GeminiGithubClientIssueGetError):
             repository = self.github.get_repo(self.repo_id)
-            issue = repository.get_issue(issue_number)
+            issue = repository.get_issue(issue_num)
             result = {
                 "title": issue.title,
                 "body": issue.body,
@@ -173,79 +189,95 @@ class GitHubAPIClient:
                     for comment in issue.get_comments()
                 ],
             }
-        logger.debug(f"Issue {issue_number}: {result}")
+        logger.debug(f"Issue {issue_num}: {result}")
         return result
 
-    def get_issue_body(self, issue_number: int) -> str:
+    def get_issue_body(self, issue_number: int | None = None) -> str:
         """Get the body of an issue.
 
         Args:
-            issue_number: Issue number
+            issue_number: Optional issue number. Uses the instance's default if None.
 
         Returns:
             String containing the issue body
         """
-        with self.error_handler("getting issue body", f"issue number: {issue_number}", GeminiGithubClientIssueBodyGetError):
+        issue_num = issue_number if issue_number is not None else self.issue_number
+        if issue_num is None:
+            raise ValueError("Issue number must be provided or set in the client.")
+
+        with self.error_handler("getting issue body", f"issue number: {issue_num}", GeminiGithubClientIssueBodyGetError):
             repository = self.github.get_repo(self.repo_id)
-            issue = repository.get_issue(issue_number)
+            issue = repository.get_issue(issue_num)
             response = f"# {issue.title}\n\n{issue.body}"
-            logger.debug(f"Issue body for issue {issue_number}: {response.strip()}")
+            logger.debug(f"Issue body for issue {issue_num}: {response.strip()}")
             return response.strip()
 
-    def get_issue_comments(self, issue_number: int) -> list[dict[str, Any]]:
+    def get_issue_comments(self, issue_number: int | None = None) -> list[dict[str, Any]]:
         """Get all comments on an issue.
 
         Args:
-            issue_number: Issue number
+            issue_number: Optional issue number. Uses the instance's default if None.
 
         Returns:
             List of dictionaries containing comment information
         """
-        with self.error_handler("getting issue comments", f"issue number: {issue_number}", GeminiGithubClientIssueCommentsGetError):
+        issue_num = issue_number if issue_number is not None else self.issue_number
+        if issue_num is None:
+            raise ValueError("Issue number must be provided or set in the client.")
+
+        with self.error_handler("getting issue comments", f"issue number: {issue_num}", GeminiGithubClientIssueCommentsGetError):
             repository = self.github.get_repo(self.repo_id)
-            issue = repository.get_issue(issue_number)
+            issue = repository.get_issue(issue_num)
             return [comment.raw_data for comment in issue.get_comments()]
 
-    def create_issue_comment(self, issue_number: int, body: str) -> bool:
+    def create_issue_comment(self, issue_number: int | None = None, body: str) -> bool:
         """Create a comment on an issue.
 
         Args:
-            issue_number: Issue number.
+            issue_number: Optional issue number. Uses the instance's default if None.
             body: Comment body text.
 
         Returns:
             A string confirming the comment creation and its ID.
         """
+        issue_num = issue_number if issue_number is not None else self.issue_number
+        if issue_num is None:
+            raise ValueError("Issue number must be provided or set in the client.")
+
         if self.issue_comment_counter == 1:
             msg = "The model attempted to create more than one comment but only one is allowed. Model must stop."
             raise GeminiGithubClientCommentLimitError(msg)
 
         body_suffix = "\n\nThis is an automated response generated by a GitHub Action."
 
-        with self.error_handler("creating issue comment", f"issue number: {issue_number}", GeminiGithubClientIssueCommentCreateError):
+        with self.error_handler("creating issue comment", f"issue number: {issue_num}", GeminiGithubClientIssueCommentCreateError):
             repository = self.github.get_repo(self.repo_id)
-            issue = repository.get_issue(issue_number)
+            issue = repository.get_issue(issue_num)
             comment = issue.create_comment(body + body_suffix)
 
         self.issue_comment_counter += 1
 
         return True
 
-    def create_pull_request_comment(self, pull_number: int, body: str) -> bool:
+    def create_pull_request_comment(self, pull_number: int | None = None, body: str) -> bool:
         """Create a comment on a pull request.
 
         Args:
-            pull_number: Pull request number
+            pull_number: Optional pull request number. Uses the instance's default if None.
             body: Comment body text
 
         Returns:
             A string confirming the comment creation and its ID.
         """
+        pr_num = pull_number if pull_number is not None else self.pull_number
+        if pr_num is None:
+            raise ValueError("Pull request number must be provided or set in the client.")
+
         with self.error_handler(
-            "creating pull request comment", f"pull request number: {pull_number}", GeminiGithubClientPRCommentCreateError
+            "creating pull request comment", f"pull request number: {pr_num}", GeminiGithubClientPRCommentCreateError
         ):
             repository = self.github.get_repo(self.repo_id)
-            issue = repository.get_issue(pull_number)
+            issue = repository.get_issue(pr_num)
             issue.create_comment(body)
 
         return True

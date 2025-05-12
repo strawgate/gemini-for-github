@@ -230,12 +230,12 @@ class GitHubAPIClient:
             issue = repository.get_issue(issue_num)
             return [comment.raw_data for comment in issue.get_comments()]
 
-    def create_issue_comment(self, issue_number: int | None = None, body: str) -> bool:
+    def create_issue_comment(self, body: str, issue_number: int | None = None) -> bool:
         """Create a comment on an issue.
 
         Args:
-            issue_number: Optional issue number. Uses the instance's default if None.
             body: Comment body text.
+            issue_number: Optional issue number. Uses the instance's default if None.
 
         Returns:
             A string confirming the comment creation and its ID.

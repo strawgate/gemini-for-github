@@ -37,6 +37,7 @@ class ConfigFileCommandEntry(BaseModel):
         None, description="An illustrative example of how this command might be used or the sequence of actions it performs."
     )
     prerun_tools: list[str] = Field(default_factory=list, description="A list of tool names that this command is permitted to use.")
+
     @model_validator(mode="after")
     def only_one_prompt_source(self) -> Self:
         if not self.prompt and not self.prompt_file:

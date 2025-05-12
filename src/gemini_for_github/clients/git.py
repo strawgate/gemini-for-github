@@ -58,10 +58,8 @@ class GitClient:
         return {
             "new_branch": self.new_branch,
             "push_current_branch": self.push_current_branch,
-            #"clone_repository": self.clone_repository,
+            # "clone_repository": self.clone_repository,
         }
-
-    
 
     def configure_git(self) -> bool:
         """Configure the Git client."""

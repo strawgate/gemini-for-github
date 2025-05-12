@@ -1,4 +1,5 @@
 import asyncio
+import json
 from collections.abc import Callable
 from enum import Enum
 from typing import Any, Literal
@@ -10,7 +11,6 @@ from google.genai.errors import ClientError, ServerError
 from google.genai.types import (
     Content,
     ContentListUnion,
-    ContentUnion,
     FunctionCall,
     FunctionCallingConfig,
     FunctionCallingConfigMode,
@@ -31,7 +31,6 @@ from pydantic import BaseModel, TypeAdapter
 
 from gemini_for_github.errors.genai import (
     GenAITaskUnknownStatusError,
-    GenAIToolFunctionError,
 )
 from gemini_for_github.shared.logging import BASE_LOGGER
 
@@ -104,7 +103,7 @@ class GenAIClient:
         self.thinking = thinking
         self.declared_tools = {}
         self.native_tools: dict[str, Tool] = {
-            "google_search": GoogleSearch(), # type: ignore
+            "google_search": GoogleSearch(),  # type: ignore
         }
         self.tool_call_history = []
 
@@ -285,7 +284,10 @@ class GenAIClient:
 
     def get_allowed_tools(self, tool_names: list[str]) -> list[tuple[str, Tool]]:
         allowed_tools = []
-        for name in tool_names:
+
+        reduced_and_sorted_tool_names = sorted(set(tool_names))
+
+        for name in reduced_and_sorted_tool_names:
             if name in self.declared_tools:
                 allowed_tools.append((name, self.declared_tools[name][0]))
             elif name in self.native_tools:
@@ -293,6 +295,38 @@ class GenAIClient:
             else:
                 raise ValueError(f"Tool {name} not found")
         return allowed_tools
+
+    def log_conversation_summary(self, contents: list[Content]):
+        for index, content in enumerate(contents):
+            if not content.role or not content.parts:
+                continue
+
+            role: str = content.role
+            parts: list[Part] = content.parts
+
+            for part in parts:
+                content_summary = {}
+
+                if part.text:
+                    content_summary["text"] = part.text[:20]
+                if part.function_call:
+                    content_summary["function_call"] = part.function_call.name
+                    content_summary["function_call_args"] = self._trim_call_args(part.function_call.args or {})
+                if part.function_response:
+                    content_summary["function_response"] = part.function_response.name
+
+            logger.info(f"{index}: {role}: {content_summary}")
+
+    @classmethod
+    def _trim_call_args(cls, call_args: dict[str, Any]) -> dict[str, Any]:
+        trimmed_call_args = {}
+
+        for k, v in call_args.items():
+            if isinstance(v, str):
+                trimmed_call_args[k] = v[:20]
+            else:
+                trimmed_call_args[k] = json.dumps(v)[:20]
+        return trimmed_call_args
 
     @AsyncRetry(predicate=is_retryable)
     async def _get_completion(
@@ -311,26 +345,30 @@ class GenAIClient:
             contents=contents,
             config=generation_config,
         )
-    
-    def new_user_content(self, user_prompt: str) -> Content:
-        return Content( 
+
+    @classmethod
+    def new_user_content(cls, user_prompt: str) -> Content:
+        return Content(
             role="user",
             parts=[Part(text=user_prompt)],
         )
-    
-    def new_model_content(self, model_prompt: str) -> Content:
+
+    @classmethod
+    def new_model_content(cls, model_prompt: str) -> Content:
         return Content(
             role="model",
             parts=[Part(text=model_prompt)],
         )
-    
-    def new_model_function_call(self, function_call: FunctionCall) -> Content:
+
+    @classmethod
+    def new_model_function_call(cls, function_call: FunctionCall) -> Content:
         return Content(
             role="model",
             parts=[Part(function_call=function_call)],
         )
 
-    def new_model_function_response(self, function_response: FunctionResponse) -> Content:
+    @classmethod
+    def new_model_function_response(cls, function_response: FunctionResponse) -> Content:
         return Content(
             role="model",
             parts=[Part(function_response=function_response)],
@@ -382,8 +420,10 @@ class GenAIClient:
                 raise GenAITaskUnknownStatusError(msg)
 
             if function_call.name == "report_completion":
+                self.log_conversation_summary(content_list)
                 return self._handle_completion(function_call.args, response)
             if function_call.name == "report_failure":
+                self.log_conversation_summary(content_list)
                 return self._handle_failure(function_call.args, response)
 
             function_response = await self._handle_function_call(function_call.name, function_call.args)
@@ -395,4 +435,7 @@ class GenAIClient:
             ]
             iteration += 1
 
-        return response
+        self.log_conversation_summary(content_list)
+
+        msg = f"Model did not complete task after {MAX_ITERATIONS} iterations"
+        raise GenAITaskUnknownStatusError(msg)

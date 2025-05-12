@@ -1,40 +1,25 @@
 import asyncio
 import logging
 import sys
-from collections.abc import Callable
 from pathlib import Path
 from string import Template
 
 import asyncclick
-from gemini_for_github.clients.project import ProjectClient
 import yaml
-from pydantic import ValidationError
 from google.genai.types import (
     Content,
-    ContentListUnion,
-    ContentUnion,
     FunctionCall,
-    FunctionCallingConfig,
-    FunctionCallingConfigMode,
-    FunctionDeclaration,
     FunctionResponse,
-    GenerateContentConfig,
-    GenerateContentResponse,
-    GoogleSearch,
-    HarmBlockThreshold,
-    HarmCategory,
-    Part,
-    SafetySetting,
-    ThinkingConfig,
-    Tool,
-    ToolConfig,
 )
+from pydantic import ValidationError
+
 from gemini_for_github.clients.aider import AiderClient
 from gemini_for_github.clients.filesystem import FileOperations, FolderOperations
 from gemini_for_github.clients.gemini import GenAIClient, GenAITaskResult, GenAITaskSuccess
 from gemini_for_github.clients.git import GitClient
 from gemini_for_github.clients.github import GitHubAPIClient
 from gemini_for_github.clients.mcp import MCPServer
+from gemini_for_github.clients.project import ProjectClient
 from gemini_for_github.clients.web import WebClient
 from gemini_for_github.config.config import Command, Config, ConfigFile
 from gemini_for_github.errors.aider import AiderError
@@ -44,6 +29,7 @@ from gemini_for_github.errors.mcp import MCPServerError
 from gemini_for_github.shared.logging import BASE_LOGGER
 
 logger = BASE_LOGGER.getChild("main")
+
 
 async def _load_config(config_file_path: str, tool_restrictions: str | None, command_restrictions: str | None) -> tuple[Config, ConfigFile]:
     """Loads and parses the application configuration."""
@@ -133,27 +119,30 @@ async def _select_command(user_question: str, commands: list[Command], genai_cli
     content_list = [
         genai_client.new_model_content("Ok, I understand, i'm not solving the problem, just picking the best command to use."),
         genai_client.new_user_content(available_commands),
-        genai_client.new_model_content("Okay I have read the available commands and I understand that I may need to get info from the github issue via the get_issue_with_comments tool if the user's question is too vague."),
+        genai_client.new_model_content(
+            "Okay I have read the available commands and I understand that I may need to get info from the github issue via the get_issue_with_comments tool if the user's question is too vague."
+        ),
         genai_client.new_user_content(user_prompt),
     ]
 
-    logger.info(f"Calling Gemini for command selection... of {user_question}. Allowed commands: {', '.join([cmd.name for cmd in commands])}")
+    logger.info(
+        f"Calling Gemini for command selection... of {user_question}. Allowed commands: {', '.join([cmd.name for cmd in commands])}"
+    )
 
     if response := await genai_client.perform_task(system_prompt, content_list, allowed_tools=["get_issue_with_comments"]):
-        
         if isinstance(response, GenAITaskSuccess):
             command_selection_response = response.task_details
         else:
             raise CommandNotSelectedError(response.failure_details)
 
-        logger.info(f"Gemini selected command: {command_selection_response} {response.completion_details}")
+        logger.info(f"Gemini selected command: {command_selection_response} with the reason {response.completion_details}")
 
         selected_command = next((cmd for cmd in commands if cmd.name == command_selection_response), None)
         if not selected_command:
             msg = f"Command '{selected_command}' not found"
             raise CommandNotFoundError(msg)
 
-        logger.info(f"Gemini selected command: {selected_command}")
+        logger.info(f"Gemini selected command: {selected_command.name} because it matches {selected_command.description}")
 
         return selected_command
 
@@ -167,6 +156,7 @@ async def _execute_command(system_prompt: str, content_list: list[Content], gena
     logger.info(f"Calling Gemini for prompt execution. Content list contains {len(content_list)} items")
     return await genai_client.perform_task(system_prompt, content_list, allowed_tools=tools)
 
+
 def prepare_repository(git_client: GitClient, github_client: GitHubAPIClient, pr_number: int | None = None):
     """Prepares the repository for the command."""
 
@@ -177,7 +167,7 @@ def prepare_repository(git_client: GitClient, github_client: GitHubAPIClient, pr
         logger.info(f"Cloning repository {branch} for pull request {pr_number}")
     else:
         logger.info(f"Cloning repository {branch} for default branch")
-    
+
     git_client.clone_repository(branch=branch)
 
 
@@ -269,19 +259,28 @@ async def cli(
             context["github_pr_number"] = github_pr_number
         if user_question:
             context["user_question"] = user_question
-    
+
         content_list: list = []
 
         if command.prerun_tools:
-            content_list.append(genai_client.new_model_content("Before I get started with the user's request, I'm going to get some background information."))
+            content_list.append(
+                genai_client.new_model_content(
+                    "Before I get started with the user's request, I'm going to get some background information."
+                )
+            )
             for tool in command.prerun_tools:
                 content_list.append(genai_client.new_model_function_call(FunctionCall(name=tool, args={})))
                 result = await genai_client._handle_function_call(tool, {})
                 content_list.append(genai_client.new_model_function_response(FunctionResponse(name=tool, response=result.response)))
-            content_list.append(genai_client.new_model_content("I've got the background information I need. Let's get started on the user's request."))
+            content_list.append(
+                genai_client.new_model_content("I've got the background information I need. Let's get started on the user's request.")
+            )
 
         template_string = Template(command.prompt)
-        content_list.append(genai_client.new_user_content(template_string.substitute(context)))
+        templated_string = template_string.substitute(context)
+        content_list.append(genai_client.new_user_content(templated_string))
+
+        logger.info(f"Templated Prompt: {templated_string}")
 
         if command.example_flow:
             content_list.append(genai_client.new_model_content("What flow should I follow for answering this request?"))

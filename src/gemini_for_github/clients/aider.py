@@ -53,7 +53,7 @@ class AiderClient:
 
         if repo_map is None:
             raise AiderError("Failed to get repo map")
-        
+
         return repo_map
 
     def offer_code_diff(self, prompt: str) -> str:

@@ -2,14 +2,13 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Propose a Solution for Issue 1",
+            "name": "Propose a Solution for Issue 17",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/src/gemini_for_github/main.py",
             "args": [
-                "--debug",
                 "--github-issue-number",
-                "1",
+                "17",
                 "--user-question",
                 "/gemini make a pr to fix this please"
            ],

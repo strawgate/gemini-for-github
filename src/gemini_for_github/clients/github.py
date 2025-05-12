@@ -6,20 +6,20 @@ from github import Auth, Github
 from github.Repository import Repository
 
 from gemini_for_github.errors.github import (
-    GithubClientCommentLimitError,
-    GithubClientError,
-    GithubClientIssueBodyGetError,
-    GithubClientIssueCommentCreateError,
-    GithubClientIssueCommentsGetError,
-    GithubClientIssueGetError,
-    GithubClientPRCommentCreateError,
-    GithubClientPRCreateError,
-    GithubClientPRDiffGetError,
-    GithubClientPRGetError,
-    GithubClientPRLimitError,
-    GithubClientPRReviewCreateError,
-    GithubClientPRReviewLimitError,
-    GithubClientRepositoryGetError,
+    GeminiGithubClientCommentLimitError,
+    GeminiGithubClientError,
+    GeminiGithubClientIssueBodyGetError,
+    GeminiGithubClientIssueCommentCreateError,
+    GeminiGithubClientIssueCommentsGetError,
+    GeminiGithubClientIssueGetError,
+    GeminiGithubClientPRCommentCreateError,
+    GeminiGithubClientPRCreateError,
+    GeminiGithubClientPRDiffGetError,
+    GeminiGithubClientPRGetError,
+    GeminiGithubClientPRLimitError,
+    GeminiGithubClientPRReviewCreateError,
+    GeminiGithubClientPRReviewLimitError,
+    GeminiGithubClientRepositoryGetError,
 )
 from gemini_for_github.shared.logging import BASE_LOGGER
 
@@ -64,18 +64,15 @@ class GitHubAPIClient:
             logger.info(f"Performing {operation} for {details}")
             yield self.github
             logger.info(f"Successfully performed {operation} for {details}")
-        except GithubClientError as e:
-            logger.exception(f"Error occurred while performing {operation}: {details}")
-            raise e from e
         except Exception as e:
             logger.exception(f"Unknown error occurred while {operation}: {details}")
             if exception:
-                raise exception from e
-            raise GithubClientError(message=details or str(e)) from e
+                raise e  # noqa: TRY201
+            raise GeminiGithubClientError(message=details or str(e)) from e
 
     def get_repository(self) -> Repository:
         """Get the repository."""
-        with self.error_handler("getting repository", f"repository id: {self.repo_id}", GithubClientRepositoryGetError):
+        with self.error_handler("getting repository", f"repository id: {self.repo_id}", GeminiGithubClientRepositoryGetError):
             return self.github.get_repo(self.repo_id)
 
     def get_tools(self) -> dict[str, Callable]:
@@ -93,19 +90,19 @@ class GitHubAPIClient:
 
     def get_default_branch(self) -> str:
         """Get the default branch for the repository."""
-        with self.error_handler("getting default branch", f"repository id: {self.repo_id}", GithubClientPRGetError):
+        with self.error_handler("getting default branch", f"repository id: {self.repo_id}", GeminiGithubClientPRGetError):
             repository = self.github.get_repo(self.repo_id)
             return repository.default_branch
 
     def get_branch_from_pr(self, pull_number: int) -> str:
         """Get the branch name from a pull request."""
-        with self.error_handler("getting branch from pull request", f"pull request number: {pull_number}", GithubClientPRGetError):
+        with self.error_handler("getting branch from pull request", f"pull request number: {pull_number}", GeminiGithubClientPRGetError):
             repository = self.github.get_repo(self.repo_id)
             return repository.get_pull(pull_number).head.ref
 
     def get_pull_request(self, pull_number: int) -> dict[str, Any]:
         """Get a pull request."""
-        with self.error_handler("getting pull request", f"pull request number: {pull_number}", GithubClientPRGetError):
+        with self.error_handler("getting pull request", f"pull request number: {pull_number}", GeminiGithubClientPRGetError):
             repository = self.github.get_repo(self.repo_id)
             return repository.get_pull(pull_number).raw_data
 
@@ -118,7 +115,7 @@ class GitHubAPIClient:
         Returns:
             String containing the diff
         """
-        with self.error_handler("getting pull request diff", f"pull request number: {pull_number}", GithubClientPRDiffGetError):
+        with self.error_handler("getting pull request diff", f"pull request number: {pull_number}", GeminiGithubClientPRDiffGetError):
             repository = self.github.get_repo(self.repo_id)
             pull_request = repository.get_pull(pull_number)
             files = pull_request.get_files()
@@ -138,9 +135,11 @@ class GitHubAPIClient:
         """
         if self.pr_review_counter == 1:
             msg = "The model attempted to create more than one pull request review but only one is allowed. Model must stop."
-            raise GithubClientPRReviewLimitError(msg)
+            raise GeminiGithubClientPRReviewLimitError(msg)
 
-        with self.error_handler("creating pull request review", f"pull request number: {pull_number}", GithubClientPRReviewCreateError):
+        with self.error_handler(
+            "creating pull request review", f"pull request number: {pull_number}", GeminiGithubClientPRReviewCreateError
+        ):
             repository = self.github.get_repo(self.repo_id)
             pull_request = repository.get_pull(pull_number)
             pull_request.create_review(body=body, event=event)
@@ -158,7 +157,7 @@ class GitHubAPIClient:
         Returns:
             A dictionary containing the issue title, body, tags, and comments.
         """
-        with self.error_handler("getting issue", f"issue number: {issue_number}", GithubClientIssueGetError):
+        with self.error_handler("getting issue", f"issue number: {issue_number}", GeminiGithubClientIssueGetError):
             repository = self.github.get_repo(self.repo_id)
             issue = repository.get_issue(issue_number)
             result = {
@@ -186,7 +185,7 @@ class GitHubAPIClient:
         Returns:
             String containing the issue body
         """
-        with self.error_handler("getting issue body", f"issue number: {issue_number}", GithubClientIssueBodyGetError):
+        with self.error_handler("getting issue body", f"issue number: {issue_number}", GeminiGithubClientIssueBodyGetError):
             repository = self.github.get_repo(self.repo_id)
             issue = repository.get_issue(issue_number)
             response = f"# {issue.title}\n\n{issue.body}"
@@ -202,7 +201,7 @@ class GitHubAPIClient:
         Returns:
             List of dictionaries containing comment information
         """
-        with self.error_handler("getting issue comments", f"issue number: {issue_number}", GithubClientIssueCommentsGetError):
+        with self.error_handler("getting issue comments", f"issue number: {issue_number}", GeminiGithubClientIssueCommentsGetError):
             repository = self.github.get_repo(self.repo_id)
             issue = repository.get_issue(issue_number)
             return [comment.raw_data for comment in issue.get_comments()]
@@ -219,16 +218,14 @@ class GitHubAPIClient:
         """
         if self.issue_comment_counter == 1:
             msg = "The model attempted to create more than one comment but only one is allowed. Model must stop."
-            raise GithubClientCommentLimitError(msg)
+            raise GeminiGithubClientCommentLimitError(msg)
 
         body_suffix = "\n\nThis is an automated response generated by a GitHub Action."
 
-        with self.error_handler("creating issue comment", f"issue number: {issue_number}", GithubClientIssueCommentCreateError):
+        with self.error_handler("creating issue comment", f"issue number: {issue_number}", GeminiGithubClientIssueCommentCreateError):
             repository = self.github.get_repo(self.repo_id)
             issue = repository.get_issue(issue_number)
             comment = issue.create_comment(body + body_suffix)
-
-        self.issue_comment_counter += 1
 
         self.issue_comment_counter += 1
 
@@ -244,7 +241,9 @@ class GitHubAPIClient:
         Returns:
             A string confirming the comment creation and its ID.
         """
-        with self.error_handler("creating pull request comment", f"pull request number: {pull_number}", GithubClientPRCommentCreateError):
+        with self.error_handler(
+            "creating pull request comment", f"pull request number: {pull_number}", GeminiGithubClientPRCommentCreateError
+        ):
             repository = self.github.get_repo(self.repo_id)
             issue = repository.get_issue(pull_number)
             issue.create_comment(body)
@@ -282,10 +281,12 @@ class GitHubAPIClient:
         """
         if self.pr_create_counter == 1:
             msg = "The model attempted to create more than one pull request but only one is allowed. Stop."
-            raise GithubClientPRLimitError(msg)
+            raise GeminiGithubClientPRLimitError(msg)
 
         with self.error_handler(
-            "creating pull request", f"head branch: {head_branch}, base branch: {base_branch}, title: {title}", GithubClientPRCreateError
+            "creating pull request",
+            f"head branch: {head_branch}, base branch: {base_branch}, title: {title}",
+            GeminiGithubClientPRCreateError,
         ):
             repository = self.github.get_repo(self.repo_id)
             pull_request = repository.create_pull(title=title, body=body, head=head_branch, base=base_branch)

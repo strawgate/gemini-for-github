@@ -260,6 +260,14 @@ async def cli(
         if user_question:
             context["user_question"] = user_question
 
+        # TODO: Add logic here to obtain test failure information for the 'fix_failing_tests' command.
+        # This might involve using the GitHub Checks API or downloading test artifact files.
+        # Example placeholder:
+        # test_failure_output = ""
+        # if command.name == "fix_failing_tests" and github_pr_number:
+        #     test_failure_output = await get_test_failures_for_pr(github_pr_number) # Need to implement this function
+        #     context["test_failure_output"] = test_failure_output # Add to context for prompt templating
+
         content_list: list = []
 
         if command.prerun_tools:
@@ -270,6 +278,7 @@ async def cli(
             )
             for tool in command.prerun_tools:
                 content_list.append(genai_client.new_model_function_call(FunctionCall(name=tool, args={})))
+                # TODO: Pass relevant context/arguments to prerun tools if needed
                 result = await genai_client._handle_function_call(tool, {})
                 content_list.append(genai_client.new_model_function_response(FunctionResponse(name=tool, response=result.response)))
             content_list.append(
@@ -277,6 +286,7 @@ async def cli(
             )
 
         template_string = Template(command.prompt)
+        # TODO: Ensure all variables used in the command prompt (like $test_failure_output) are present in the context dictionary.
         templated_string = template_string.substitute(context)
         content_list.append(genai_client.new_user_content(templated_string))
 

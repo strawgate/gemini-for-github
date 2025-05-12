@@ -4,7 +4,6 @@ globally_allowed_tools:
   # - Tool name
   - get_pull_request_diff
   - offer_code
-  - create_pr_review
   - get_pull_request
   - get_issue_with_comments
   - create_issue_comment
@@ -271,8 +270,11 @@ commands:
 
       On GitHub pull request number: $github_issue_number -- the developer has asked: $user_question
 
-      A pr code review always ends with you posting a comment on the pull request with your findings.
-      
+      A pr code review always ends with you posting a review on the pull request with your findings.
+  
+    allowed_tools:
+    - create_pr_review
+
   - name: "update_pr_with_docs"
     description: "Update a pull request with documentation."
     prompt: |

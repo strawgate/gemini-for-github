@@ -70,6 +70,7 @@ DEFAULT_SKIP_READ = [
     "*.bak",
     "*.swp",
     "*.swo",
+    "*.lock",
     "*~",
     "*#",
 ]
@@ -507,7 +508,8 @@ class FolderOperations(MCPMixin):
                 errors=errors,
                 results=results,
             )
-            logger.info(f"File read summary: {summary}")
+            file_size = len("{results}")
+            logger.info(f"File read summary: {file_size} bytes provided to LLM, {summary.total_files} files read, {summary.skipped_files} skipped, {len(summary.errors)} errors")
             return summary
 
     async def move(self, source_path: str, destination_path: str) -> bool:

@@ -93,11 +93,6 @@ class GitClient:
             os.chdir(self.repo_dir)
             logger.info(f"Changing directory to {self.repo_dir}")
 
-        # list out all files in the repository recursively
-        for root, dirs, files in os.walk(self.repo_dir):
-            for file in files:
-                logger.info(f"File: {os.path.join(root, file)}")
-
         self.configure_git()
 
         return True

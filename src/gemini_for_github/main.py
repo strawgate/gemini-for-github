@@ -105,16 +105,12 @@ async def _initialize_mcp_servers(config_file: ConfigFile) -> list[MCPServer]:
 
 async def _select_command(user_question: str, commands: list[Command], genai_client: GenAIClient) -> Command:
     """Selects the most appropriate command based on the user's question."""
-    system_prompt = f"""
+    system_prompt = """
     You are a GitHub based AI Agent. You receive plain text questions from the developer and you need to determine which
     command, if any most closely matches the developer's request. 
     
     You are not trying to solve the developer's problem. Just categorize their request.
     
-    Available types of help we can offer and when they are appropriate to use:
-"command_name": "description"
-- {"\n- ".join([f"{cmd.name}: Appropriate when the developer asks you to {cmd.description}" for cmd in commands])}
-
     When you identify the command name that most closely matches the developer's request:
     1. Report successful completion
       a. Place the command_name in the "task_details" field
@@ -127,11 +123,17 @@ async def _select_command(user_question: str, commands: list[Command], genai_cli
     """
 
     user_prompt = f"""
-    User request to identify the best command to use: **{user_question}**
+    Request to identify the best command to use for: **{user_question}**
     """
+
+    available_commands = f"""
+- {"\n- ".join([f"{cmd.name}: Appropriate when the developer asks you to {cmd.description}" for cmd in commands])}
+"""
 
     content_list = [
         genai_client.new_model_content("Ok, I understand, i'm not solving the problem, just picking the best command to use."),
+        genai_client.new_user_content(available_commands),
+        genai_client.new_model_content("Okay I have read the available commands and I understand that I may need to get info from the github issue via the get_issue_with_comments tool if the user's question is too vague."),
         genai_client.new_user_content(user_prompt),
     ]
 
@@ -144,7 +146,7 @@ async def _select_command(user_question: str, commands: list[Command], genai_cli
         else:
             raise CommandNotSelectedError(response.failure_details)
 
-        logger.info(f"Gemini selected command: {command_selection_response} {response}")
+        logger.info(f"Gemini selected command: {command_selection_response} {response.completion_details}")
 
         selected_command = next((cmd for cmd in commands if cmd.name == command_selection_response), None)
         if not selected_command:

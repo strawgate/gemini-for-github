@@ -71,7 +71,7 @@ class GitHubAPIClient:
             logger.exception(f"Unknown error occurred while {operation}: {details}")
             if exception:
                 raise exception from e
-            raise GithubClientError(details) from e
+            raise GithubClientError(message=details or str(e)) from e
 
     def get_repository(self) -> Repository:
         """Get the repository."""

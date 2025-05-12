@@ -259,12 +259,12 @@ class GitHubAPIClient:
 
         return True
 
-    def create_pull_request_comment(self, pull_number: int | None = None, body: str) -> bool:
+    def create_pull_request_comment(self, body: str, pull_number: int | None = None) -> bool:
         """Create a comment on a pull request.
 
         Args:
-            pull_number: Optional pull request number. Uses the instance's default if None.
             body: Comment body text
+            pull_number: Optional pull request number. Uses the instance's default if None.
 
         Returns:
             A string confirming the comment creation and its ID.

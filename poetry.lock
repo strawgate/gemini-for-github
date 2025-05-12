@@ -1299,6 +1299,21 @@ files = [
 tests = ["pytest"]
 
 [[package]]
+name = "html-to-markdown"
+version = "1.3.2"
+description = "Convert HTML to markdown"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "html_to_markdown-1.3.2-py3-none-any.whl", hash = "sha256:cd41a786fee973d28e80b324aef1122e7af1316e242dbb4ed49e757333cd9557"},
+    {file = "html_to_markdown-1.3.2.tar.gz", hash = "sha256:34ccb3806973b833e9babbf9919a7aee63913a41563c8b6ccd58c0afab8458ec"},
+]
+
+[package.dependencies]
+beautifulsoup4 = ">=4.13.4"
+
+[[package]]
 name = "httpcore"
 version = "1.0.9"
 description = "A minimal low-level HTTP client."
@@ -3114,6 +3129,24 @@ socks = ["PySocks (>=1.5.6,!=1.5.7)"]
 use-chardet-on-py3 = ["chardet (>=3.0.2,<6)"]
 
 [[package]]
+name = "requests-mock"
+version = "1.12.1"
+description = "Mock out responses from the requests package"
+optional = false
+python-versions = ">=3.5"
+groups = ["main"]
+files = [
+    {file = "requests-mock-1.12.1.tar.gz", hash = "sha256:e9e12e333b525156e82a3c852f22016b9158220d2f47454de9cae8a77d371401"},
+    {file = "requests_mock-1.12.1-py2.py3-none-any.whl", hash = "sha256:b1e37054004cdd5e56c84454cc7df12b25f90f382159087f4b6915aaeef39563"},
+]
+
+[package.dependencies]
+requests = ">=2.22,<3"
+
+[package.extras]
+fixture = ["fixtures"]
+
+[[package]]
 name = "rich"
 version = "14.0.0"
 description = "Render rich text, tables, progress bars, syntax highlighting, markdown and more to the terminal"
@@ -4278,4 +4311,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12, <3.13"
-content-hash = "70f087216e85a96e501d31c61f446461eb90736b555eed5ddf9d9a89336c3a2e"
+content-hash = "339cc49bd34fb504171af24a75090b45f8a4759e2a63e514d7e99ba084c2ee8a"

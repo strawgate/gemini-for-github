@@ -1,7 +1,7 @@
 import pytest
-import requests_mock
+import requests_mock  # noqa: F401
 
-from src.gemini_for_github.clients.web import WebClient
+from gemini_for_github.clients.web import WebClient
 
 
 @pytest.fixture
@@ -14,7 +14,7 @@ def test_get_web_page_success(web_client, requests_mock):
     """Tests successful fetching and markdown conversion of a web page."""
     url = "http://example.com"
     html_content = "<html><body><h1>Test Page</h1><p>This is a test.</p></body></html>"
-    expected_markdown = "# Test Page\n\nThis is a test."
+    expected_markdown = "Test Page\n=========\n\nThis is a test."
 
     requests_mock.get(url, text=html_content)
 
@@ -40,7 +40,7 @@ def test_get_web_page_with_list(web_client, requests_mock):
     """Tests fetching and markdown conversion of a page with a list."""
     url = "http://example.com/list"
     html_content = "<html><body><h1>List</h1><ul><li>Item 1</li><li>Item 2</li></ul></body></html>"
-    expected_markdown = "# List\n\n*   Item 1\n*   Item 2"
+    expected_markdown = "List\n====\n\n* Item 1\n* Item 2"
 
     requests_mock.get(url, text=html_content)
 

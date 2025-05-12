@@ -104,11 +104,22 @@ class GitHubAPIClient:
             repository = self.github.get_repo(self.repo_id)
             return repository.get_pull(pull_number).head.ref
 
-    def get_pull_request(self, pull_number: int) -> dict[str, Any]:
-        """Get a pull request."""
-        with self.error_handler("getting pull request", f"pull request number: {pull_number}", GeminiGithubClientPRGetError):
+    def get_pull_request(self, pull_number: int | None = None) -> dict[str, Any]:
+        """Get a pull request.
+
+        Args:
+            pull_number: Optional pull request number. Uses the instance's default if None.
+
+        Returns:
+            A dictionary containing the pull request information.
+        """
+        pr_num = pull_number if pull_number is not None else self.pull_number
+        if pr_num is None:
+            raise ValueError("Pull request number must be provided or set in the client.")
+
+        with self.error_handler("getting pull request", f"pull request number: {pr_num}", GeminiGithubClientPRGetError):
             repository = self.github.get_repo(self.repo_id)
-            return repository.get_pull(pull_number).raw_data
+            return repository.get_pull(pr_num).raw_data
 
     def get_pull_request_diff(self, pull_number: int | None = None) -> str:
         """Get the diff for a pull request.
@@ -139,7 +150,7 @@ class GitHubAPIClient:
             event: Review event type (e.g., "COMMENT", "APPROVE", "REQUEST_CHANGES")
 
         Returns:
-            String containing the review information
+            True if the review was created successfully.
         """
         pr_num = pull_number if pull_number is not None else self.pull_number
         if pr_num is None:
@@ -219,7 +230,7 @@ class GitHubAPIClient:
             issue_number: Optional issue number. Uses the instance's default if None.
 
         Returns:
-            List of dictionaries containing comment information
+            List of dictionaries containing comment information.
         """
         issue_num = issue_number if issue_number is not None else self.issue_number
         if issue_num is None:
@@ -238,7 +249,7 @@ class GitHubAPIClient:
             issue_number: Optional issue number. Uses the instance's default if None.
 
         Returns:
-            A string confirming the comment creation and its ID.
+            True if the comment was created successfully.
         """
         issue_num = issue_number if issue_number is not None else self.issue_number
         if issue_num is None:
@@ -267,7 +278,7 @@ class GitHubAPIClient:
             pull_number: Optional pull request number. Uses the instance's default if None.
 
         Returns:
-            A string confirming the comment creation and its ID.
+            True if the comment was created successfully.
         """
         pr_num = pull_number if pull_number is not None else self.pull_number
         if pr_num is None:

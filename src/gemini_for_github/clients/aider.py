@@ -72,6 +72,10 @@ class AiderClient:
         if repo_map is None:
             raise AiderError("Failed to get repo map")
 
+        if len(repo_map) > 1048576:  # noqa: PLR2004
+            logger.warning(f"Repo map is too large (>1MB) to be processed: {len(repo_map)} characters.")
+            return repo_map[:1048576]  # noqa: PLR2004
+
         return repo_map
 
     def offer_code_diff(self, prompt: str) -> str:

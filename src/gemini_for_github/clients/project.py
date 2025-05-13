@@ -1,6 +1,10 @@
 from collections.abc import Callable
 from pathlib import Path
 
+from gemini_for_github.shared.logging import BASE_LOGGER
+
+logger = BASE_LOGGER.getChild("project")
+
 
 class ProjectClient:
     def __init__(self):
@@ -14,8 +18,32 @@ class ProjectClient:
 
     def read_readmes(self) -> dict[str, str]:
         readmes = {}
-        for file in Path().glob("**/*.md"):
+
+        # start with root readmes
+        for file in Path().glob("*.md"):
+            if len(readmes) > 100:  # noqa: PLR2004
+                break
+
             with open(file) as f:
-                readmes[file.name] = f.read()
+                readmes[file.name] = f.read()  # noqa: PLR2004
+            if len(readmes[file.name]) > 1024:  # noqa: PLR2004
+                logger.warning(f"README is too large (>1KB) to be included in read_readmes: {file.name}")
+                readmes[file.name] = readmes[file.name][:1024]  # noqa: PLR2004
+
+        for file in Path().glob("**/*.md"):
+            if len(readmes) > 100:  # noqa: PLR2004
+                break
+            
+            if file.name in readmes:
+                continue
+
+            with open(file) as f:
+                readmes[file.name] = f.read()  # noqa: PLR2004
+
+            if len(readmes[file.name]) > 1024:  # noqa: PLR2004
+                logger.warning(f"README is too large (>1KB) to be included in read_readmes: {file.name}")
+                readmes[file.name] = readmes[file.name][:1024]  # noqa: PLR2004
+
+        
 
         return readmes

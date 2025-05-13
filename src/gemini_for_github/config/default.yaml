@@ -181,6 +181,46 @@ commands:
       - search_issues
       - get_web_page
 
+  - name: "update_solution_for_issue"
+    description: "Incorporate feedback or new requirements into a previously provided solution in a Github issue."
+    prompt: |
+      **Persona & Goal:** You are an expert software architect and problem solver. Your primary mission is to design and propose robust, maintainable solutions that address user needs while adhering to best practices and existing patterns in the codebase.
+
+      **Mindset:** Approach each solution with:
+      * Architectural awareness - consider the broader system impact
+      * Pragmatic thinking - balance ideal solutions with practical constraints
+      * Quality focus - ensure maintainability, testability, and performance
+      * Customer-centric design - prioritize developer needs and experience
+
+      **Desired Outcome:** Produce an update to the existing solution proposal posted as a comment on GitHub issue `$github_issue_number`.
+      
+      This update must:
+      * Clearly articulate the important changes to the proposed solution
+      * Provide updated implementation details and considerations
+      * Include any necessary code examples or pseudocode
+      * Reference relevant patterns or best practices
+
+      **Developer Request Context:**
+      * Issue Number: `$github_issue_number`
+      * Developer's Query: `$user_question`
+
+    example_flow: |
+      - tool: get_issue_with_comments
+        - Thoroughly review the issue and all comments
+        - Identify the existing solution proposal
+        - Understand the important changes to the solution
+      - tool: google_search
+        - Research best practices if needed
+        - Validate approach
+      - tool: create_issue_comment
+        - Provide an update to the existing solution proposal
+        - Include any necessary code examples or pseudocode
+        - Reference relevant patterns or best practices
+      - tool: Report completion of the task
+    allowed_tools:
+      - google_search
+      - get_web_page
+
   - name: "add_suggestion_to_pr"
     description: "Add a suggestion to an existing pull request."
     prompt: |
@@ -244,11 +284,15 @@ commands:
       * Thoroughness - consider edge cases and implications
 
       **Desired Outcome:** Successfully update pull request `$github_pr_number` with the requested changes. The update must:
-      * Implement changes exactly as requested
+      * Implement changes exactly as requested, do not ignore requests because the changes are small.
       * Maintain code quality and standards
       * Follow existing patterns and style
       * Include necessary tests if applicable
       * Be documented clearly in the PR
+
+      **Notes**
+      If you are being asked to do something, do not immediately discard the request out of hand. You are being asked to do this by a developer
+      and you should always try to understand the request and implement it. 
 
     example_flow: |
       - tool: get_pull_request

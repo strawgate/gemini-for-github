@@ -415,6 +415,8 @@ class FolderOperations(MCPMixin):
         and filtering using glob patterns. Default exclusion patterns (like `.git`, `__pycache__`)
         are applied unless `bypass_default_exclusions` is True.
 
+        Excludes take precedence over includes. Providing an exclude of ["*"] is silly and will return an empty list. Do not do that.
+
         Args:
             folder_path: The relative or absolute path of the folder to list.
             include: A list of glob patterns. Only items whose relative paths match any of these patterns are included. Use `["*"]` or `[]` to include everything initially. Example: `["*.py", "*.txt"]`. For recursive matching, use `**`, e.g., `["**/*.py"]`.

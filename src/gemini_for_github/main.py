@@ -116,11 +116,22 @@ async def _select_command(user_question: str, commands: list[Command], genai_cli
 - {"\n- ".join([f"{cmd.name}: Appropriate when the developer asks you to {cmd.description}" for cmd in commands])}
 """
 
+    # def select_command(command: str) -> str:
+    #     if command not in [cmd.name for cmd in commands]:
+    #         msg = f"Command '{command}' not found"
+    #         raise CommandNotFoundError(msg)
+    #     return command
+    
+
+
     content_list = [
         genai_client.new_model_content("Ok, I understand, i'm not solving the problem, just picking the best command to use."),
         genai_client.new_user_content(available_commands),
         genai_client.new_model_content(
             "Okay I have read the available commands and I understand that I may need to get info from the github issue via the get_issue_with_comments tool if the user's question is too vague."
+        ),
+        genai_client.new_model_content(
+            f"I also understand that I must report failure or report success. If I report success, the only valid options for task_details are {', '.join([cmd.name for cmd in commands])}."
         ),
         genai_client.new_user_content(user_prompt),
     ]
@@ -225,8 +236,6 @@ async def cli(
         github_client = await _initialize_github_client(github_token, github_repo_id)
         repo_dir = root_path / "repo"
         git_client = await _initialize_git_client(repo_dir, github_token, github_repo)
-        file_operations, folder_operations = await _initialize_filesystem_client(root_path)
-        aider_client = await _initialize_aider_client(repo_dir, model)
         web_client = WebClient()
         genai_client = await _initialize_genai_client(gemini_api_key, model, thinking)
 
@@ -237,12 +246,7 @@ async def cli(
             genai_client.register_tool(name, func)
         for name, func in git_client.get_tools().items():
             genai_client.register_tool(name, func)
-        for name, func in file_operations.get_tools().items():
-            genai_client.register_tool(name, func)
-        for name, func in folder_operations.get_tools().items():
-            genai_client.register_tool(name, func)
-        for name, func in aider_client.get_tools().items():
-            genai_client.register_tool(name, func)
+
         for name, func in web_client.get_tools().items():
             genai_client.register_tool(name, func)
         for name, func in project_client.get_tools().items():
@@ -251,6 +255,16 @@ async def cli(
         command = await _select_command(user_question, config.commands, genai_client)
 
         prepare_repository(git_client, github_client, github_pr_number)
+
+        file_operations, folder_operations = await _initialize_filesystem_client(root_path)
+        aider_client = await _initialize_aider_client(repo_dir, model)
+
+        for name, func in file_operations.get_tools().items():
+            genai_client.register_tool(name, func)
+        for name, func in folder_operations.get_tools().items():
+            genai_client.register_tool(name, func)
+        for name, func in aider_client.get_tools().items():
+            genai_client.register_tool(name, func)
 
         context = {}
         if github_issue_number:
@@ -294,8 +308,11 @@ async def cli(
 
         if isinstance(final_response, GenAITaskSuccess):
             logger.info(f"Gemini believes it has completed the task: {final_response.task_details}: {final_response.completion_details}")
+            sys.exit(0)
         else:
             logger.info(f"Gemini believes it has failed the task: {final_response.task_details}: {final_response.failure_details}")
+            sys.exit(1)
+
 
     except (FileNotFoundError, yaml.YAMLError, ValidationError):
         logger.exception("Configuration error")

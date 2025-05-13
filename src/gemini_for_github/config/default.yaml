@@ -11,10 +11,12 @@ globally_allowed_tools:
   - folder_read_all
   - file_read
   - get_web_page
+  - get_code_structure
+  - search_repo_map
 # Command prompts
 # Note: Command prompts can be restricted by the CLI.
 globally_prerun_tools:
-  - get_repo_map
+  - get_code_structure
   - read_readmes
 
 system_prompt: |
@@ -74,6 +76,8 @@ commands:
         - plan the research strategy
       - tool: google_search
         - Search the web for relevant and reliable information on the topic
+      - tool: search_repo_map
+        - If needed search the codebase for specific classes, functions, or methods
       - tool: create_issue_comment
         - Synthesize the findings into a clear and detailed explanation
         - Cite all sources used in your response
@@ -110,16 +114,11 @@ commands:
         - Read the issue and all associated comments thoroughly
         - Identify key symptoms, error messages, and developer's expectations
         - Note any attempted solutions or workarounds mentioned
-      - tool: folder_contents
-        - Map relevant components and their interactions
-        - Review implementation details in affected files
-        - Check for similar issues or patterns in the codebase
-        - Examine test coverage and documentation
+      - tool: search_repo_map
+        - If needed search the codebase for specific classes, functions, or methods
       - tool: folder_read_all
-        - Identify the primary cause of the issue
-        - Document any contributing factors
-        - Consider edge cases and potential side effects
-        - Validate findings against known patterns or similar issues
+        - After finding specific files from the search_repo_map, use the folder_read_all tool to read relevant files in parts 
+          to get a holistic understanding of the codebase and the issue.
       - tool: google_search
         - Research similar issues or patterns
         - Validate findings
@@ -157,16 +156,11 @@ commands:
         - Identify explicit and implicit requirements
         - Understand developer's pain points and expectations
         - Note any constraints or limitations
-      - tool: folder_contents
-        - Map affected components and their interactions
-        - Review existing implementation patterns
-        - Examine related features or functionality
-        - Consider performance and scalability implications
+      - tool: search_repo_map
+        - If needed search the codebase for specific classes, functions, or methods
       - tool: folder_read_all
-        - Develop a clear, implementable solution
-        - Consider multiple approaches if appropriate
-        - Document key design decisions and trade-offs
-        - Plan for testing and validation
+        - After finding specific files from the search_repo_map, use the folder_read_all tool to read relevant files in parts 
+          to get a holistic understanding of the codebase and the issue.
       - tool: google_search
         - Research best practices
         - Validate approach
@@ -179,6 +173,51 @@ commands:
     allowed_tools:
       - google_search
       - search_issues
+      - get_web_page
+
+  - name: "update_solution_for_issue"
+    description: "Incorporate feedback or new requirements into a previously provided solution in a Github issue."
+    prompt: |
+      **Persona & Goal:** You are an expert software architect and problem solver. Your primary mission is to design and propose robust, maintainable solutions that address user needs while adhering to best practices and existing patterns in the codebase.
+
+      **Mindset:** Approach each solution with:
+      * Architectural awareness - consider the broader system impact
+      * Pragmatic thinking - balance ideal solutions with practical constraints
+      * Quality focus - ensure maintainability, testability, and performance
+      * Customer-centric design - prioritize developer needs and experience
+
+      **Desired Outcome:** Produce an update to the existing solution proposal posted as a comment on GitHub issue `$github_issue_number`.
+      
+      This update must:
+      * Clearly articulate the important changes to the proposed solution
+      * Provide updated implementation details and considerations
+      * Include any necessary code examples or pseudocode
+      * Reference relevant patterns or best practices
+
+      **Developer Request Context:**
+      * Issue Number: `$github_issue_number`
+      * Developer's Query: `$user_question`
+
+    example_flow: |
+      - tool: get_issue_with_comments
+        - Thoroughly review the issue and all comments
+        - Identify the existing solution proposal
+        - Understand the important changes to the solution
+      - tool: search_repo_map
+        - If needed search the codebase for specific classes, functions, or methods
+      - tool: folder_read_all
+        - After finding specific files from the search_repo_map, use the folder_read_all tool to read relevant files in parts 
+          to get a holistic understanding of the codebase and the issue.
+      - tool: google_search
+        - Research best practices if needed
+        - Validate approach
+      - tool: create_issue_comment
+        - Provide an update to the existing solution proposal
+        - Include any necessary code examples or pseudocode
+        - Reference relevant patterns or best practices
+      - tool: Report completion of the task
+    allowed_tools:
+      - google_search
       - get_web_page
 
   - name: "add_suggestion_to_pr"
@@ -209,16 +248,11 @@ commands:
         - Understand the purpose and scope of changes
         - Consider the broader impact on the codebase
         - Note any specific concerns or focus areas
-      - tool: folder_contents
-        - Examine the changes in detail
-        - Review affected components and their interactions
-        - Check for potential issues or improvements
-        - Consider performance, security, and maintainability
+      - tool: search_repo_map
+        - If needed search the codebase for specific classes, functions, or methods
       - tool: folder_read_all
-        - Identify specific improvement opportunities
-        - Formulate clear, actionable suggestions
-        - Provide rationale for each suggestion
-        - Consider alternative approaches if relevant
+        - After finding specific files from the search_repo_map, use the folder_read_all tool to read relevant files in parts 
+          to get a holistic understanding of the codebase and the issue.
       - tool: google_search
         - Research best practices
         - Validate suggestions
@@ -244,11 +278,15 @@ commands:
       * Thoroughness - consider edge cases and implications
 
       **Desired Outcome:** Successfully update pull request `$github_pr_number` with the requested changes. The update must:
-      * Implement changes exactly as requested
+      * Implement changes exactly as requested, do not ignore requests because the changes are small.
       * Maintain code quality and standards
       * Follow existing patterns and style
       * Include necessary tests if applicable
       * Be documented clearly in the PR
+
+      **Notes**
+      If you are being asked to do something, do not immediately discard the request out of hand. You are being asked to do this by a developer
+      and you should always try to understand the request and implement it. 
 
     example_flow: |
       - tool: get_pull_request
@@ -256,16 +294,11 @@ commands:
         - Understand the specific requirements
         - Identify affected components
         - Note any constraints or considerations
-      - tool: folder_contents
-        - Examine current implementation
-        - Identify integration points
-        - Check for potential impacts
-        - Consider testing requirements
+      - tool: search_repo_map
+        - If needed search the codebase for specific classes, functions, or methods
       - tool: folder_read_all
-        - Make requested changes precisely
-        - Follow existing code patterns
-        - Maintain code quality standards
-        - Add necessary tests if applicable
+        - After finding specific files from the search_repo_map, use the folder_read_all tool to read relevant files in parts 
+          to get a holistic understanding of the codebase and the issue.
       - tool: write_code
         - Review changes for accuracy
         - Check for potential issues
@@ -317,9 +350,11 @@ commands:
         - Thoroughly review the issue and comments
         - Check for previous automated responses with proposed solutions
         - Use the most recent proposed solution as basis if found
-      - tool: folder_contents
-        - Read relevant parts of the codebase
-        - Understand context for the solution
+      - tool: search_repo_map
+        - If needed search the codebase for specific classes, functions, or methods
+      - tool: folder_read_all
+        - After finding specific files from the search_repo_map, use the folder_read_all tool to read relevant files in parts 
+          to get a holistic understanding of the codebase and the issue.
       - tool: new_branch
         - Create a new branch for the pull request
       - tool: write_code
@@ -374,12 +409,11 @@ commands:
       - tool: folder_contents
         - Review the relevant codebase for context
         - Analyze potential impacts
+      - tool: search_repo_map
+        - If needed search the codebase for specific classes, functions, or methods
       - tool: folder_read_all
-        - Analyze code quality and adherence to project standards
-        - Check for design issues and potential improvements
-        - Identify edge cases that may not have been considered
-        - Look for missing or outdated documentation
-        - Find opportunities for refactoring or simplification
+        - After finding specific files from the search_repo_map, use the folder_read_all tool to read relevant files in parts 
+          to get a holistic understanding of the codebase and the issue.
       - tool: create_pr_review
         - Provide detailed feedback
         - Highlight areas for improvement
@@ -415,9 +449,11 @@ commands:
       - tool: get_pull_request
         - Get the pull request details
         - Review the code changes
-      - tool: folder_contents
-        - Identify existing documentation that needs updating
-        - Find areas requiring new documentation
+      - tool: search_repo_map
+        - If needed search the codebase for specific classes, functions, or methods
+      - tool: folder_read_all
+        - After finding specific files from the search_repo_map, use the folder_read_all tool to read relevant files in parts 
+          to get a holistic understanding of the codebase and the issue.
       - tool: write_code
         - Update existing documentation
         - Create new documentation as needed
@@ -455,10 +491,11 @@ commands:
       * Developer's Query: `$user_question`
 
     example_flow: |
-      - tool: folder_contents
-        - Read the entire codebase
-        - Gain comprehensive understanding of project structure
+      - tool: search_repo_map
+        - If needed search the codebase for specific classes, functions, or methods
       - tool: folder_read_all
+        - After finding specific files from the search_repo_map, use the folder_read_all tool to read relevant files in parts 
+          to get a holistic understanding of the codebase and the issue.
         - Analyze code quality, consistency, and best practices
         - Review architectural and design patterns
         - Assess code complexity and maintainability
@@ -467,39 +504,6 @@ commands:
       - tool: create_issue_comment
         - Synthesize findings into detailed report
         - Post comprehensive code review findings
-      - tool: Report completion of the task
-    allowed_tools:
-      - create_issue_comment
-
-  - name: "kindly_reject_the_user_request"
-    description: "A developer has specifically asked you to kindly reject the developer's request. You will never choose this command without being explicitly asked to do so."
-    prompt: |
-      **Persona & Goal:** You are a diplomatic communicator. Your primary mission is to politely decline user requests while maintaining a positive relationship and explaining the decision professionally.
-
-      **Mindset:** Approach each rejection with:
-      * Empathy - understand and acknowledge the user's needs
-      * Professionalism - maintain a respectful tone
-      * Clarity - explain the decision clearly
-      * Positivity - focus on maintaining a good relationship
-
-      **Desired Outcome:** Provide a polite rejection response that:
-      * Expresses appreciation for the request
-      * Clearly states the request cannot be implemented
-      * Maintains a friendly and professional tone
-      * Uses appropriate emojis to convey warmth
-
-      **Developer Request Context:**
-      * Issue Number: `$github_issue_number`
-      * Developer's Query: `$user_question`
-
-    example_flow: |
-      - tool: get_issue_with_comments
-        - Review the developer's request
-      - tool: create_issue_comment
-        - Formulate polite and friendly rejection message
-        - Express appreciation for the request
-        - Clearly state the request will not be implemented
-        - Use appropriate emojis for friendly tone
       - tool: Report completion of the task
     allowed_tools:
       - create_issue_comment

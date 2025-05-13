@@ -2,6 +2,7 @@ import asyncio
 import json
 from collections.abc import Callable
 from enum import Enum
+import sys
 from typing import Any, Literal
 
 from google.api_core.retry import if_transient_error
@@ -37,7 +38,7 @@ from gemini_for_github.shared.logging import BASE_LOGGER
 QUOTA_EXCEEDED_ERROR_CODE = 429
 MODEL_OVERLOADED_ERROR_CODE = 503
 
-MAX_ITERATIONS = 10
+MAX_ITERATIONS = 15
 
 
 def is_retryable(e) -> bool:
@@ -404,6 +405,13 @@ class GenAIClient:
             role="model",
             parts=[Part(function_response=function_response)],
         )
+    
+    def _print_last_response(self, response: GenerateContentResponse):
+        if not response.candidates or not response.candidates[0].content or not response.candidates[0].content.parts:
+            return
+
+        for part in response.candidates[0].content.parts:
+            logger.warning(f"Last response part: {part}")
 
     async def perform_task(self, system_prompt: str, content_list: list[Content], allowed_tools: list[str]) -> GenAITaskResult:
         """Perform a task using the AI model.
@@ -442,6 +450,9 @@ class GenAIClient:
 
         while iteration < MAX_ITERATIONS:
             logger.info(f"Model completion iteration {iteration}")
+
+            iteration += 1
+            
             response = await self._get_completion(system_prompt=system_prompt, contents=content_list, tools=provided_tools)  # type: ignore
 
             logger.debug(f"Model completion response: {response}")
@@ -449,17 +460,20 @@ class GenAIClient:
             function_call = self._detect_function_call(response)
 
             if not function_call:
-                logger.info("No function call detected")
-                break
+                logger.error("No function call detected. Asking for completion again.")
+                self._print_last_response(response)
+                continue
 
             logger.info(f"Function call detected: {function_call.name} with args: {function_call.args}")
 
             self.tool_call_history.append(function_call.name)
 
             if not function_call.name:
-                msg = "Function call name is required"
+                msg = "Function call name is missing but tool calls are required. Asking for completion again."
                 logger.error(msg)
-                raise GenAITaskUnknownStatusError(msg)
+                self._print_last_response(response)
+                continue
+                #raise GenAITaskUnknownStatusError(msg)
 
             if function_call.name == "report_completion":
                 self.log_conversation_summary(content_list)
@@ -470,12 +484,20 @@ class GenAIClient:
 
             function_response = await self._handle_function_call(function_call.name, function_call.args)
 
+            if sys.getsizeof(function_response.response) > 1048576:  # noqa: PLR2004
+                logger.warning(f"Function response is too large (>1MB) to be processed: {function_response.response}")
+                function_response = FunctionResponse(
+                    name=function_call.name,
+                    response={
+                        "error": "Response is too large to be processed. Perform your tool call in a way that returns less data.",
+                    },
+                )
+
             content_list = [
                 *list(content_list),  # type: ignore
                 Content(role="model", parts=[Part(function_call=function_call)]),
                 Content(role="user", parts=[Part(function_response=function_response)]),
             ]
-            iteration += 1
 
         self.log_conversation_summary(content_list)
 

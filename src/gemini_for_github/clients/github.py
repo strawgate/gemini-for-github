@@ -98,7 +98,23 @@ class GitHubAPIClient:
             "create_pull_request": self.create_pull_request,
             "create_pull_request_comment": self.create_pull_request_comment,
             "search_issues": self.search_issues,
+            "get_test_failures": self.get_test_failures,
         }
+
+    def get_test_failures(self, pull_number: int) -> str:
+        """Get test failure information for a pull request.
+
+        This is currently a placeholder and will eventually get real test failure
+        data from the GitHub Checks API or artifacts.
+
+        Args:
+            pull_number: Pull request number
+
+        Returns:
+            A string containing test failure information (currently a placeholder).
+        """
+        # Placeholder implementation
+        return f"Test failure information for PR {pull_number}: No test failures found (placeholder)"
 
     def get_default_branch(self) -> str:
         """

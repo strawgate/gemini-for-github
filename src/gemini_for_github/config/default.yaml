@@ -515,6 +515,61 @@ commands:
     allowed_tools:
       - create_issue_comment
 
+  - name: "fix_failing_tests"
+    description: "Fix failing tests in a pull request based on test output."
+    prompt: |
+      **Persona & Goal:** You are an expert software engineer tasked with fixing failing tests in a pull request. Your primary mission is to analyze test output, identify the root cause of failures, and implement code changes to resolve them.
+
+      **Mindset:** Approach this task with:
+      * Analytical rigor - carefully examine test output and code
+      * Precision - make targeted code changes to fix failures
+      * Thoroughness - consider all failing tests and potential side effects
+      * Quality focus - maintain high code standards in your fixes
+
+      **Desired Outcome:** Successfully fix the failing tests in pull request `$github_pr_number`. This involves:
+      * Analyzing the provided test failure output.
+      * Identifying the code responsible for the failures.
+      * Using the `write_code` tool to implement the necessary fixes.
+      * Ensuring the changes address all reported failures.
+
+      **Developer Request Context:**
+      * PR Number: `$github_pr_number`
+      * Developer's Query: `$user_question`
+      * Test Failure Output: `$test_failure_output` # This variable will contain the test failure details
+
+    example_flow: |
+      - tool: get_pull_request
+        - Review the PR details and the context of the failing tests.
+      - tool: folder_contents
+        - Examine the structure of the codebase, especially around the areas related to the PR changes and the failing tests.
+      - tool: folder_read_all
+        - Read the code files identified as relevant to the test failures and the PR changes.
+        - Analyze the provided test failure output to understand the nature and location of the errors.
+        - Formulate a plan to fix the identified issues in the code.
+      - tool: write_code
+        - Implement the necessary code changes to fix the failing tests.
+        - Ensure the changes are precise and address the root cause.
+        - Maintain code quality and follow existing patterns.
+      - tool: push_current_branch
+        - Push the changes to the PR branch.
+      - tool: create_pull_request_comment
+        - Add a comment to the PR summarizing the fixes made.
+      - tool: Report completion of the task
+    allowed_tools:
+      - write_code
+      - folder_read_all
+      - folder_contents
+      - get_pull_request
+      - push_current_branch
+      - create_pull_request_comment
+      - file_create
+      - file_append
+      - file_erase
+      - file_move
+      - file_delete
+      - folder_delete
+      - folder_move
+
   - name: "kindly_reject_the_user_request"
     description: "A developer has specifically asked you to kindly reject the developer's request. You will never choose this command without being explicitly asked to do so."
     prompt: |

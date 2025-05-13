@@ -37,6 +37,7 @@ from gemini_for_github.shared.logging import BASE_LOGGER
 
 QUOTA_EXCEEDED_ERROR_CODE = 429
 MODEL_OVERLOADED_ERROR_CODE = 503
+INTERNAL_ERROR_CODE = 500
 
 MAX_ITERATIONS = 15
 
@@ -50,6 +51,9 @@ def is_retryable(e) -> bool:
         return True
     if isinstance(e, ServerError) and e.code == MODEL_OVERLOADED_ERROR_CODE:
         logger.warning(f"Retrying due to model overloaded: {e}")
+        return True
+    if isinstance(e, ServerError) and e.code == INTERNAL_ERROR_CODE:
+        logger.warning(f"Retrying due to internal error: {e}")
         return True
     return False
 
@@ -283,6 +287,10 @@ class GenAIClient:
                 category=HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
                 threshold=HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
             ),
+            SafetySetting(
+                category=HarmCategory.HARM_CATEGORY_CIVIC_INTEGRITY,
+                threshold=HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+            )
         ]
 
     def _detect_function_call(self, response: GenerateContentResponse) -> FunctionCall | None:

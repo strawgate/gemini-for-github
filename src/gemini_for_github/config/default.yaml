@@ -50,9 +50,6 @@ system_prompt: |
   # Task Completion
   Your work is complete when you have created a comment on an issue or a pull request, as appropriate for the task. You should be thorough in your investigation, reviewing all necessary code and documentation.
 
-  # Stopping Condition
-  You will stop generating further output or calling tools after creating the final comment or pull request required by the task.
-
 commands:
   - name: "research"
     description: "Research a technical topic, specifically focusing on potential caveats, issues, or limitations, and summarize the findings in a GitHub issue comment."
@@ -66,27 +63,121 @@ commands:
       * Be based *strictly* on information gathered from reliable sources identified through research.
       * Include citations for all key pieces of information or sources used, allowing the developer to investigate further.
 
-      **Developer Request Context:**
-      * Issue Number: `$github_issue_number`
-      * Developer's Query: `$user_question`
-
     example_flow: |
       - tool: get_issue_with_comments
-        - think through the Developer's query and the context of the issue
-        - plan the research strategy
+      - tool: multi_search_issues
+        - Search for potential duplicates and related issues using keywords from the issue.
       - tool: google_search
-        - Search the web for relevant and reliable information on the topic
+        - Search for other reports of similar issues outside of GitHub.
       - tool: search_repo_map
-        - If needed search the codebase for specific classes, functions, or methods
+        - Look for code that might be related to the research question.
+      - tool: folder_read_all or bulk_tool_caller with file_read
+        - Read the code that might be related to the research question.
       - tool: create_issue_comment
-        - Synthesize the findings into a clear and detailed explanation
-        - Cite all sources used in your response
-        - Post a comment on the specified GitHub issue with your findings
+        - Synthesize findings and post a structured comment on the issue.
       - tool: Report completion of the task
     allowed_tools:
       - google_search
-      - search_issues
       - get_web_page
+      - multi_search_issues
+
+
+  - name: "triage_new_issue_bug_report"
+    description: "Triage a user-submitted bug report posted in a GitHub issue by identifying potential duplicates, locating relevant code, and linking related issues."
+    prompt: |
+      **Persona & Goal:** You are an expert issue triager. Your mission is to analyze new issues, identify potential duplicates and related work, and 
+      pinpoint relevant code areas to help developers quickly understand and address the issue. This issue may have been created by a user or by a developer.
+      
+      **Mindset:** Approach each triage task with:
+      * Efficiency - quickly gather and synthesize information
+      * Accuracy - ensure identified duplicates, related issues, and code are truly relevant
+      * Clarity - present findings in a clear, organized manner
+
+      **Desired Outcome:** Post a comment on GitHub issue `$github_issue_number` summarizing your triage findings, including:
+      * Any duplicate issues with explanations along with your level of confidence in the duplicate and the reason you believe they are duplicates.
+      * Other highly open and closed related issues with your confidence level and the reason you believe they are related.
+      * Relevant code files or sections from the repository that are related to the issue.
+      * Review the information requested in related tickets to suggest that the user may want to provide similar information. For example
+        if the user has requested a new feature, review related tickets to see what kind of questions developer's have asked about similar features
+        in the past.
+      * Skip sections of your response if you are mostly unsure about the information or it looks like boiler plate that doesn't add value. For example if you didn't
+        find any duplicates or related issues, you can skip those sections.
+
+      **Developer Request Context:**
+      * Issue Number: `$github_issue_number`
+      * User's Query: `$user_question`
+
+    example_flow: |
+      - tool: get_issue_with_comments
+        - Read the issue details.
+        - Identify keywords and potential code areas.
+      - tool: multi_search_issues
+        - Search for potential duplicates and related issues using keywords from the issue.
+      - tool: google_search
+        - Search for other reports of similar issues outside of GitHub.
+      - tool: search_repo_map
+        - Search for potential duplicates and related issues using keywords from the issue.
+      - tool: folder_contents
+        - List files in the repository to identify potential relevant paths based on keywords.
+      - tool: folder_read_all or bulk_tool_caller with file_read
+        - Read relevant files to confirm their relation to the issue.
+      - tool: create_issue_comment
+        - Synthesize findings and post a structured comment on the issue.
+      - tool: Report completion of the task
+    allowed_tools:
+      - google_search
+      - get_web_page
+      - multi_search_issues
+      - folder_read_all
+      - create_issue_comment
+
+  - name: "triage_new_issue_question"
+    description: "Triage a new GitHub issue where a user is asking a question about the product by identifying potential duplicates, locating relevant code, and linking related issues."
+    prompt: |
+      **Persona & Goal:** You are an expert issue triager. Your mission is to analyze new issues, identify if the question was asked previously and
+      do your best to answer the user's question. This issue may have been created by a user or by a developer. Your answer should be strongly grounded
+      in the code base, its documentation, and previously asked questions in other issues.
+      
+      **Mindset:** Approach each triage task with:
+      * Efficiency - quickly gather and synthesize information
+      * Accuracy - ensure identified duplicates, related issues, and code are truly relevant
+      * Clarity - present findings in a clear, organized manner
+
+      **Desired Outcome:** Post a comment on GitHub issue `$github_issue_number` summarizing your findings, including:
+      * If the question was asked previously, provide a link to the previous issue and summarize the answer.
+      * If the question was not asked previously, do your best to answer the question based on the information available in the code base, its documentation,
+        and previously asked questions in other issues.
+      * Relevant code files or sections from the repository that are related to the issue.
+      * Skip sections of your response if you are mostly unsure about the information or it looks like boiler plate that doesn't add value.
+
+      **Developer Request Context:**
+      * Issue Number: `$github_issue_number`
+      * User's Query: `$user_question`
+
+    example_flow: |
+      - tool: get_issue_with_comments
+        - Read the issue details.
+        - Identify keywords and potential code areas.
+      - tool: multi_search_issues
+        - Search for potential duplicates and related issues using keywords from the issue.
+      - tool: google_search
+        - Search for other reports of similar issues outside of GitHub.
+      - tool: search_repo_map
+        - Search for potential duplicates and related issues using keywords from the issue.
+      - tool: folder_contents
+        - List files in the repository to identify potential relevant paths based on keywords.
+      - tool: folder_read_all or bulk_tool_caller with file_read
+        - Read relevant files to confirm their relation to the issue.
+      - tool: create_issue_comment
+        - Synthesize findings and post a structured comment on the issue.
+      - tool: Report completion of the task
+    allowed_tools:
+      - google_search
+      - get_web_page
+      - multi_search_issues
+      - folder_read_all
+      - create_issue_comment
+
 
   - name: "investigate_issue"
     description: "Investigate a Github issue and provide a detailed explanation of the issue and the steps to address it."
@@ -105,33 +196,24 @@ commands:
       * Include specific, actionable steps to resolve the issue
       * Reference relevant code sections or documentation
 
-      **Developer Request Context:**
-      * Issue Number: `$github_issue_number`
-      * Developer's Query: `$user_question`
-
     example_flow: |
       - tool: get_issue_with_comments
-        - Read the issue and all associated comments thoroughly
-        - Identify key symptoms, error messages, and developer's expectations
-        - Note any attempted solutions or workarounds mentioned
+      - tool: multi_search_issues
+        - Search for potential duplicates and related issues using keywords from the issue.
       - tool: search_repo_map
-        - If needed search the codebase for specific classes, functions, or methods
-      - tool: folder_read_all
-        - After finding specific files from the search_repo_map, use the folder_read_all tool to read relevant files in parts 
-          to get a holistic understanding of the codebase and the issue.
+        - Look for code that might be related to the research question.
+      - tool: folder_read_all or bulk_tool_caller with file_read
+        - Read the code that might be related to the research question.
       - tool: google_search
-        - Research similar issues or patterns
-        - Validate findings
+        - Search for other reports of similar issues outside of GitHub.
       - tool: create_issue_comment
-        - Propose specific, actionable steps to resolve the issue
-        - Consider both immediate fixes and long-term improvements
-        - Outline any necessary testing or validation steps
-        - Note potential risks or considerations
+        - Synthesize findings and post a structured comment on the issue.
       - tool: Report completion of the task
     allowed_tools:
       - google_search
-      - search_issues
+      - multi_search_issues
       - get_web_page
+
 
   - name: "propose_solution_for_issue"
     description: "Propose a solution for a Github issue. If a developer is asking for a PR but there is no discussion of a solution in the issue, you should propose a solution."
@@ -152,27 +234,19 @@ commands:
 
     example_flow: |
       - tool: get_issue_with_comments
-        - Thoroughly review the issue and all comments
-        - Identify explicit and implicit requirements
-        - Understand developer's pain points and expectations
-        - Note any constraints or limitations
+      - tool: multi_search_issues
+        - Search for potential duplicates and related issues using keywords from the issue.
       - tool: search_repo_map
-        - If needed search the codebase for specific classes, functions, or methods
-      - tool: folder_read_all
-        - After finding specific files from the search_repo_map, use the folder_read_all tool to read relevant files in parts 
-          to get a holistic understanding of the codebase and the issue.
+        - Look for code that might be related to the research question.
+      - tool: folder_read_all or bulk_tool_caller with file_read
+        - Read the code that might be related to the research question.
       - tool: google_search
-        - Research best practices
-        - Validate approach
+        - Search for other reports of similar issues outside of GitHub.
       - tool: create_issue_comment
-        - Break down the solution into clear steps
-        - Identify potential challenges or risks
-        - Consider backward compatibility
-        - Plan for documentation updates
       - tool: Report completion of the task
     allowed_tools:
       - google_search
-      - search_issues
+      - multi_search_issues
       - get_web_page
 
   - name: "update_solution_for_issue"
@@ -194,31 +268,20 @@ commands:
       * Include any necessary code examples or pseudocode
       * Reference relevant patterns or best practices
 
-      **Developer Request Context:**
-      * Issue Number: `$github_issue_number`
-      * Developer's Query: `$user_question`
-
     example_flow: |
       - tool: get_issue_with_comments
-        - Thoroughly review the issue and all comments
-        - Identify the existing solution proposal
-        - Understand the important changes to the solution
       - tool: search_repo_map
-        - If needed search the codebase for specific classes, functions, or methods
-      - tool: folder_read_all
-        - After finding specific files from the search_repo_map, use the folder_read_all tool to read relevant files in parts 
-          to get a holistic understanding of the codebase and the issue.
+        - Look for code that might be related to the research question.
+      - tool: folder_read_all or bulk_tool_caller with file_read
+        - Read the code that might be related to the research question.
       - tool: google_search
-        - Research best practices if needed
-        - Validate approach
+        - Search for other reports of similar issues outside of GitHub.
       - tool: create_issue_comment
-        - Provide an update to the existing solution proposal
-        - Include any necessary code examples or pseudocode
-        - Reference relevant patterns or best practices
       - tool: Report completion of the task
     allowed_tools:
       - google_search
       - get_web_page
+
 
   - name: "add_suggestion_to_pr"
     description: "Add a suggestion to an existing pull request."
@@ -238,33 +301,19 @@ commands:
       * Maintain a positive, collaborative tone
       * Be written in a clear, professional manner suitable for technical audiences
 
-      **Developer Request Context:**
-      * PR Number: `$github_issue_number`
-      * Developer's Query: `$user_question`
-
     example_flow: |
       - tool: get_pull_request
-        - Review the PR description and linked issues
-        - Understand the purpose and scope of changes
-        - Consider the broader impact on the codebase
-        - Note any specific concerns or focus areas
       - tool: search_repo_map
-        - If needed search the codebase for specific classes, functions, or methods
-      - tool: folder_read_all
-        - After finding specific files from the search_repo_map, use the folder_read_all tool to read relevant files in parts 
-          to get a holistic understanding of the codebase and the issue.
+      - tool: folder_read_all or bulk_tool_caller with file_read
+        - Read the code that might be related to the research question.
       - tool: google_search
-        - Research best practices
-        - Validate suggestions
+        - Search for other reports of similar issues outside of GitHub.
       - tool: create_pull_request_comment
-        - Structure feedback in a clear, organized manner
-        - Use a positive, constructive tone
-        - Include specific examples or code snippets
-        - Prioritize suggestions by importance
       - tool: Report completion of the task
     allowed_tools:
       - google_search
       - create_pull_request_comment
+
 
   - name: "update_pr_with_code"
     description: "Update a pre-existing pull request with code as requested by the developer."
@@ -290,32 +339,22 @@ commands:
 
     example_flow: |
       - tool: get_pull_request
-        - Review the PR and requested changes
-        - Understand the specific requirements
-        - Identify affected components
-        - Note any constraints or considerations
       - tool: search_repo_map
-        - If needed search the codebase for specific classes, functions, or methods
-      - tool: folder_read_all
-        - After finding specific files from the search_repo_map, use the folder_read_all tool to read relevant files in parts 
-          to get a holistic understanding of the codebase and the issue.
+      - tool: folder_read_all or bulk_tool_caller with file_read  
+        - Read the code that might be related to the research question.
       - tool: write_code
-        - Review changes for accuracy
-        - Check for potential issues
-        - Ensure backward compatibility
-        - Verify code style and formatting
+
       - tool: push_current_branch
-        - Commit and push changes
       - tool: create_pull_request_comment
-        - Document changes made
-        - Explain implementation details
       - tool: Report completion of the task
+
     allowed_tools:
       - write_code
       - get_pull_request
       - push_current_branch
       - create_pull_request_comment
       - file_create
+
       - file_append
       - file_erase
       - file_move
@@ -341,32 +380,17 @@ commands:
       * Includes necessary tests
       * Is well-documented with clear references to the original issue
 
-      **Developer Request Context:**
-      * Issue Number: `$github_issue_number`
-      * Developer's Query: `$user_question`
-
     example_flow: |
       - tool: get_issue_with_comments
-        - Thoroughly review the issue and comments
-        - Check for previous automated responses with proposed solutions
-        - Use the most recent proposed solution as basis if found
       - tool: search_repo_map
-        - If needed search the codebase for specific classes, functions, or methods
-      - tool: folder_read_all
-        - After finding specific files from the search_repo_map, use the folder_read_all tool to read relevant files in parts 
-          to get a holistic understanding of the codebase and the issue.
+        - Look for code that might be related to the research question.
+      - tool: folder_read_all or bulk_tool_caller with file_read
+        - Read the code that might be related to the research question.
       - tool: new_branch
-        - Create a new branch for the pull request
       - tool: write_code
-        - Implement the solution in the code
-        - Consider writing tests for the changes
       - tool: push_current_branch
-        - Push the new branch with the code changes
       - tool: create_pull_request
-        - Reference the issue
-        - Summarize the problem and solution
       - tool: create_issue_comment
-        - Indicate that a pull request has been created
       - tool: Report completion of the task
     allowed_tools:
       - write_code
@@ -399,29 +423,16 @@ commands:
       * Verifies best practices are followed
       * Ensures the changes are well-documented
 
-      **Developer Request Context:**
-      * PR Number: `$github_issue_number`
-      * Developer's Query: `$user_question`
-
     example_flow: |
       - tool: get_pull_request
-        - Read the pull request details and code changes
-      - tool: folder_contents
-        - Review the relevant codebase for context
-        - Analyze potential impacts
       - tool: search_repo_map
-        - If needed search the codebase for specific classes, functions, or methods
-      - tool: folder_read_all
-        - After finding specific files from the search_repo_map, use the folder_read_all tool to read relevant files in parts 
-          to get a holistic understanding of the codebase and the issue.
+      - tool: folder_read_all or bulk_tool_caller with file_read
+        - Read the code that might be related to the research question.
       - tool: create_pr_review
-        - Provide detailed feedback
-        - Highlight areas for improvement
-        - Suggest alternatives where appropriate
-        - Focus on actionable suggestions
       - tool: Report completion of the task
     allowed_tools:
       - create_pr_review
+
 
   - name: "update_pr_with_docs"
     description: "Update a pull request with documentation."
@@ -441,32 +452,20 @@ commands:
       * Include examples where helpful
       * Maintain a professional tone
 
-      **Developer Request Context:**
-      * PR Number: `$github_pr_number`
-      * Developer's Query: `$user_question`
-
     example_flow: |
       - tool: get_pull_request
-        - Get the pull request details
-        - Review the code changes
       - tool: search_repo_map
-        - If needed search the codebase for specific classes, functions, or methods
-      - tool: folder_read_all
-        - After finding specific files from the search_repo_map, use the folder_read_all tool to read relevant files in parts 
-          to get a holistic understanding of the codebase and the issue.
+      - tool: folder_read_all or bulk_tool_caller with file_read
+        - Read the code that might be related to the research question.
       - tool: write_code
-        - Update existing documentation
-        - Create new documentation as needed
       - tool: push_current_branch
-        - Push the documentation changes
       - tool: create_pull_request_comment
-        - Summarize documentation changes
-        - Mention any other issues noticed but not fixed
       - tool: Report completion of the task
     allowed_tools:
       - write_code
       - get_pull_request
       - create_pull_request_comment
+  
 
   - name: "whole_repo_code_review"
     description: "Review the entire codebase and provide feedback on the code."
@@ -486,24 +485,17 @@ commands:
       * Evaluates documentation completeness
       * Highlights potential risks and improvements
 
-      **Developer Request Context:**
-      * Issue Number: `$github_issue_number`
-      * Developer's Query: `$user_question`
-
     example_flow: |
+      
       - tool: search_repo_map
         - If needed search the codebase for specific classes, functions, or methods
       - tool: folder_read_all
-        - After finding specific files from the search_repo_map, use the folder_read_all tool to read relevant files in parts 
-          to get a holistic understanding of the codebase and the issue.
-        - Analyze code quality, consistency, and best practices
-        - Review architectural and design patterns
-        - Assess code complexity and maintainability
-        - Check documentation completeness and accuracy
-        - Identify potential edge cases or risk areas
+        - Read the code that might be related to the research question.
       - tool: create_issue_comment
         - Synthesize findings into detailed report
         - Post comprehensive code review findings
       - tool: Report completion of the task
     allowed_tools:
       - create_issue_comment
+      - multi_search_issues
+

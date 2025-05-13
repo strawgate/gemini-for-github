@@ -33,6 +33,22 @@
           "envFile": "${workspaceFolder}/.env",
           "justMyCode": true,
       },
+      {
+          "name": "Triage new issue",
+          "type": "debugpy",
+          "request": "launch",
+          "program": "${workspaceFolder}/src/gemini_for_github/main.py",
+          "args": [
+              "--github-issue-number",
+              "7",
+              "--user-question",
+              "/gemini Please triage this new github issue created by an unknown (untrusted) user."
+         ],
+         "cwd": "${workspaceFolder}/action_testing",
+         "console": "integratedTerminal",
+         "envFile": "${workspaceFolder}/.env",
+         "justMyCode": true,
+     },
        {
            "name": "Debug Current File",
            "type": "debugpy",

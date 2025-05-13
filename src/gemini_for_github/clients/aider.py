@@ -19,6 +19,12 @@ class AiderClient:
     This client initializes and manages the Aider Coder instance.
     """
 
+    repo_map: str | None = None
+    file_structure: list[str]
+    structured_file_structure: dict[str, list[str]]
+    structured_repo_map: dict[str, list[tuple[int, str]]]
+    inverse_structured_repo_map: dict[str, list[tuple[str, int, str]]]
+
     def __init__(self, root: Path, model: str):
         """Initializes the AiderClient.
 
@@ -53,8 +59,6 @@ class AiderClient:
 
         self.inverse_structured_repo_map = {}
         """Module-level vars, classes, functions -> File"""
-
-        self.repo_map: str
 
 
     def get_tools(self) -> dict[str, Callable]:

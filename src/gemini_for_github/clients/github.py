@@ -33,7 +33,7 @@ class GitHubAPIClient:
     pull requests, and comments.
     """
 
-    def __init__(self, token: str, repo_id: int):
+    def __init__(self, token: str, repo_id: int, owner_repo: str):
         """Initialize the GitHub API client.
 
         Args:
@@ -43,6 +43,7 @@ class GitHubAPIClient:
         auth = Auth.Token(token)
         self.github = Github(auth=auth)
         self.repo_id: int = repo_id
+        self.owner_repo = owner_repo
 
         self.issue_comment_counter: int = 0
         self.pr_create_counter: int = 0
@@ -97,7 +98,8 @@ class GitHubAPIClient:
             "create_issue_comment": self.create_issue_comment,
             "create_pull_request": self.create_pull_request,
             "create_pull_request_comment": self.create_pull_request_comment,
-            "search_issues": self.search_issues,
+            "multi_search_issues": self.multi_search_issues,
+
         }
 
     def get_default_branch(self) -> str:
@@ -407,18 +409,15 @@ class GitHubAPIClient:
 
         return True
 
-    def search_issues(self, query: str, owner: str, repo: str) -> list[dict[str, Any]]:
+    def multi_search_issues(self, queries: list[str]) -> list[dict[str, Any]]:
         """
-        Searches for issues within the specified repository using GitHub's search syntax.
+        Performs many sequential queries against the Github Issues API and returns the results.
 
         Use this tool to find issues matching specific criteria (keywords, labels, authors, etc.)
-        within the context of the repository defined by `owner` and `repo`.
 
         Args:
-            query (str): The search query string, following GitHub's issue search syntax.
-                         Example: "is:open label:bug login error"
-            owner (str): The owner (username or organization) of the repository.
-            repo (str): The name of the repository.
+            queries (list[str]): The search query string, following GitHub's issue search syntax.
+                         Example: ["is:open label:bug login error", "is:closed label:feature"]
 
         Returns:
             list[dict[str, Any]]: A list of dictionaries, where each dictionary represents
@@ -430,11 +429,53 @@ class GitHubAPIClient:
             GithubException: If the search API call fails (e.g., rate limiting, invalid query).
             GeminiGithubClientError: For other unexpected errors.
         """
-        full_query = f"{query} repo:{owner}/{repo}"
+        issues = []
+
+        for query in queries:
+            issues.extend(self.search_issues(query))
+
+        return issues
+
+
+    def search_issues(self, query: str) -> list[dict[str, Any]]:
+        """
+        Searches for issues within the specified repository using GitHub's search syntax.
+
+        Use this tool to find issues matching specific criteria (keywords, labels, authors, etc.)
+        within the context of the repository defined by `owner` and `repo`.
+
+        Args:
+            query (str): The search query string, following GitHub's issue search syntax.
+                         Example: "is:open label:bug login error"
+
+        Returns:
+            list[dict[str, Any]]: A list of dictionaries, where each dictionary represents
+                                  the raw data of an issue matching the search query, as
+                                  returned by the GitHub API. Consult the GitHub API documentation
+                                  for the issue object structure.
+
+        Raises:
+            GithubException: If the search API call fails (e.g., rate limiting, invalid query).
+            GeminiGithubClientError: For other unexpected errors.
+        """
+        full_query = f"{query} repo:{self.owner_repo} is:issue"
         logger.info(f"Searching issues with query: {full_query}")
         # PyGithub's search_issues returns a PaginatedList, convert to list of dicts
         issues = self.github.search_issues(query=full_query)
         return [issue.raw_data for issue in issues]
+    
+    def search_pull_requests(self, query: str) -> list[dict[str, Any]]:
+        """
+        Searches for pull requests within the specified repository using GitHub's search syntax.
+
+        Use this tool to find pull requests matching specific criteria (keywords, labels, authors, etc.).
+        """
+
+        full_query = f"{query} repo:{self.repo_id} is:pr"
+        logger.info(f"Searching pull requests with query: {full_query}")
+        # PyGithub's search_issues returns a PaginatedList, convert to list of dicts
+        pull_requests = self.github.search_issues(query=full_query)
+        return [pull_request.raw_data for pull_request in pull_requests]
 
     def create_pull_request(self, head_branch: str, base_branch: str, title: str, body: str) -> dict[str, Any]:
         """

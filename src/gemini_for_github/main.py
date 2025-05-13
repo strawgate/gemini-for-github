@@ -5,6 +5,7 @@ from pathlib import Path
 from string import Template
 
 import asyncclick
+from gemini_for_github.clients.multitool import BulkToolCaller
 import yaml
 from google.genai.types import (
     Content,
@@ -48,9 +49,9 @@ async def _load_config(config_file_path: str, tool_restrictions: str | None, com
     return config, config_file
 
 
-async def _initialize_github_client(github_token: str, github_repo_id: int) -> GitHubAPIClient:
+async def _initialize_github_client(github_token: str, github_repo_id: int, owner_repo: str) -> GitHubAPIClient:
     """Initializes and returns the GitHub API client."""
-    return GitHubAPIClient(token=github_token, repo_id=github_repo_id)
+    return GitHubAPIClient(token=github_token, repo_id=github_repo_id, owner_repo=owner_repo)
 
 
 async def _initialize_git_client(repo_dir: Path, github_token: str, owner_repo: str) -> GitClient:
@@ -233,13 +234,16 @@ async def cli(
         config, _ = await _load_config(str(config_path), tool_restrictions, command_restrictions)
 
         # Initialize clients
-        github_client = await _initialize_github_client(github_token, github_repo_id)
+        github_client = await _initialize_github_client(github_token, github_repo_id, github_repo)
         repo_dir = root_path / "repo"
         git_client = await _initialize_git_client(repo_dir, github_token, github_repo)
         web_client = WebClient()
         genai_client = await _initialize_genai_client(gemini_api_key, model, thinking)
 
         project_client = ProjectClient()
+
+        bulk_tool_caller = BulkToolCaller()
+
 
         # Register tools with GenAI client
         for name, func in github_client.get_tools().items():
@@ -251,6 +255,8 @@ async def cli(
             genai_client.register_tool(name, func)
         for name, func in project_client.get_tools().items():
             genai_client.register_tool(name, func)
+        # for name, func in bulk_tool_caller.get_tools().items():
+        #     genai_client.register_tool(name, func)
 
         command = await _select_command(user_question, config.commands, genai_client)
 

@@ -476,6 +476,45 @@ commands:
       - get_pull_request
       - create_pull_request_comment
 
+  - name: "triage_issue"
+    description: "Triage a new GitHub issue by identifying potential duplicates, locating relevant code, and linking related issues."
+    prompt: |
+      **Persona & Goal:** You are an expert issue triager. Your mission is to analyze new issues, identify potential duplicates and related work, and pinpoint relevant code areas to help developers quickly understand and address the issue.
+
+      **Mindset:** Approach each triage task with:
+      * Efficiency - quickly gather and synthesize information
+      * Accuracy - ensure identified duplicates, related issues, and code are truly relevant
+      * Clarity - present findings in a clear, organized manner
+
+      **Desired Outcome:** Post a comment on GitHub issue `$github_issue_number` summarizing your triage findings, including:
+      * Potential duplicate issues with explanations.
+      * Other highly related issues with explanations.
+      * Relevant code files or sections.
+
+      **Developer Request Context:**
+      * Issue Number: `$github_issue_number`
+      * Developer's Query: `$user_question`
+
+    example_flow: |
+      - tool: get_issue_with_comments
+        - Read the issue details.
+        - Identify keywords and potential code areas.
+      - tool: search_issues
+        - Search for potential duplicates and related issues using keywords from the issue.
+      - tool: folder_contents
+        - List files in the repository to identify potential relevant paths based on keywords.
+      - tool: folder_read_all
+        - Read relevant files to confirm their relation to the issue.
+      - tool: create_issue_comment
+        - Synthesize findings and post a structured comment on the issue.
+      - tool: Report completion of the task
+    allowed_tools:
+      - get_issue_with_comments
+      - search_issues
+      - folder_contents
+      - folder_read_all
+      - create_issue_comment
+
   - name: "whole_repo_code_review"
     description: "Review the entire codebase and provide feedback on the code."
     prompt: |

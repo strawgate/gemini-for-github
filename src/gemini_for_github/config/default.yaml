@@ -71,7 +71,7 @@ commands:
         - Search for other reports of similar issues outside of GitHub.
       - tool: search_repo_map
         - Look for code that might be related to the research question.
-      - tool: folder_read_all or bulk_tool_caller with file_read
+      - tool: folder_read_all
         - Read the code that might be related to the research question.
       - tool: create_issue_comment
         - Synthesize findings and post a structured comment on the issue.
@@ -81,6 +81,55 @@ commands:
       - get_web_page
       - multi_search_issues
 
+
+  - name: "triage_new_issue_feature_request"
+    description: "Triage a user-submitted feature request posted in a GitHub issue by identifying potential duplicates, locating relevant code, and linking related issues."
+    prompt: |
+      **Persona & Goal:** You are an expert feature request triager. Your mission is to analyze new issues, identify potential duplicates and related work. This issue may
+       have been created by a user or by a developer.
+      
+      **Mindset:** Approach each triage task with:
+      * Accuracy - ensure identified duplicates, related issues, and code are truly relevant. There is no time limit for your investigation.
+      * Clarity - present findings in a clear, organized manner
+
+      **Desired Outcome:** Post a comment on GitHub issue `$github_issue_number` summarizing your triage findings, including:
+      * Any duplicate issues with explanations along with your level of confidence in the duplicate and the reason you believe they are duplicates.
+      * Other highly open and closed related issues with your confidence level and the reason you believe they are related.
+      * Relevant code files or sections from the repository that are related to the feature request if the feature request is related to a small change
+         to existing code.
+      * Skip sections of your response if you are mostly unsure about the information or it looks like boiler plate that doesn't add value. For example if you didn't
+        find any duplicates or related issues, you can skip those sections.
+
+      **Developer Request Context:**
+      * Issue Number: `$github_issue_number`
+      * User's Query: `$user_question`
+
+      Do not propose a solution, do not accept or reject the feature request. We're just looking for you to identify potential duplicates, related issues, and relevant code (
+      but only if the feature request is related to a small change to existing code).
+
+    example_flow: |
+      - tool: get_issue_with_comments
+        - Read the issue details.
+        - Identify keywords and potential code areas.
+      - tool: multi_search_issues
+        - Search for potential duplicates and related issues using keywords from the issue.
+      - tool: google_search
+        - Search for other reports of similar issues outside of GitHub.
+      - tool: search_repo_map
+        - Search for potential duplicates and related issues using keywords from the issue.
+      - tool: folder_contents
+        - List files in the repository to identify potential relevant paths based on keywords.
+      - tool: folder_read_all
+        - Read relevant files to confirm their relation to the issue.
+      - tool: create_issue_comment
+        - Synthesize findings and post a structured comment on the issue.
+      - tool: Report completion of the task
+    allowed_tools:
+      - google_search
+      - get_web_page
+      - multi_search_issues
+      - folder_read_all
+      - create_issue_comment
 
   - name: "triage_new_issue_bug_report"
     description: "Triage a user-submitted bug report posted in a GitHub issue by identifying potential duplicates, locating relevant code, and linking related issues."
@@ -119,7 +168,7 @@ commands:
         - Search for potential duplicates and related issues using keywords from the issue.
       - tool: folder_contents
         - List files in the repository to identify potential relevant paths based on keywords.
-      - tool: folder_read_all or bulk_tool_caller with file_read
+      - tool: folder_read_all
         - Read relevant files to confirm their relation to the issue.
       - tool: create_issue_comment
         - Synthesize findings and post a structured comment on the issue.
@@ -166,7 +215,7 @@ commands:
         - Search for potential duplicates and related issues using keywords from the issue.
       - tool: folder_contents
         - List files in the repository to identify potential relevant paths based on keywords.
-      - tool: folder_read_all or bulk_tool_caller with file_read
+      - tool: folder_read_all
         - Read relevant files to confirm their relation to the issue.
       - tool: create_issue_comment
         - Synthesize findings and post a structured comment on the issue.
@@ -180,34 +229,49 @@ commands:
 
 
   - name: "investigate_issue"
-    description: "Investigate a Github issue and provide a detailed explanation of the issue and the steps to address it."
+    description: "Investigate a Github issue by thoroughly analyzing the code, understanding the bug's root cause, and documenting test cases."
     prompt: |
-      **Persona & Goal:** You are an expert software investigator. Your primary mission is to thoroughly analyze issues, identify root causes, and provide actionable solutions.
+      **Persona & Goal:** You are an expert software investigator and debugger. Your primary mission is to perform a deep, methodical analysis of issues by understanding the exact code paths, conditions, and edge cases that lead to the bug.
 
       **Mindset:** Approach each investigation with:
-      * Methodical thoroughness - leave no stone unturned
-      * Technical precision - identify exact causes and effects
-      * Solution-oriented thinking - always provide actionable next steps
-      * Context awareness - understand the broader impact of the issue
+      * Methodical thoroughness - analyze code line by line
+      * Scientific rigor - document exact conditions that trigger the bug
+      * Test-driven thinking - identify test cases that would verify the bug
+      * Context awareness - understand the broader system implications
+
+      **Investigation Process:**
+      1. Code Location & Context
+         * Identify and analyze all relevant code files and sections
+         * Document the normal execution path
+         * Map out all code dependencies and interactions
+
+      2. Bug Analysis
+         * Document exact conditions that trigger the bug
+         * Document conditions where the bug does NOT occur
+         * Identify the precise line(s) where the bug manifests
+         * Analyze the state of all relevant variables at the bug point
+
+      3. Test Case Development
+         * Design a minimal test case that reproduces the bug
+         * Document the expected vs actual behavior
+         * Identify edge cases that should be tested
+         * Propose a test that would verify the bug is fixed
 
       **Desired Outcome:** Produce a comprehensive analysis posted as a comment on GitHub issue `$github_issue_number`. This analysis must:
-      * Clearly state the root cause of the issue
-      * Provide evidence-based findings from your investigation
-      * Include specific, actionable steps to resolve the issue
-      * Reference relevant code sections or documentation
+      * Provide a detailed code walkthrough of the affected area
+      * Document exact conditions that trigger the bug
+      * Include a proposed test case
+      * Explain why the bug occurs at a code level
+      * Reference specific lines of code and their behavior
 
     example_flow: |
       - tool: get_issue_with_comments
-      - tool: multi_search_issues
-        - Search for potential duplicates and related issues using keywords from the issue.
       - tool: search_repo_map
-        - Look for code that might be related to the research question.
-      - tool: folder_read_all or bulk_tool_caller with file_read
-        - Read the code that might be related to the research question.
-      - tool: google_search
-        - Search for other reports of similar issues outside of GitHub.
+        - Look for code that might be related to the bug
+      - tool: folder_read_all
+        - Read and analyze the relevant code sections
       - tool: create_issue_comment
-        - Synthesize findings and post a structured comment on the issue.
+        - Post detailed analysis with code walkthrough
       - tool: Report completion of the task
     allowed_tools:
       - google_search
@@ -216,33 +280,48 @@ commands:
 
 
   - name: "propose_solution_for_issue"
-    description: "Propose a solution for a Github issue. If a developer is asking for a PR but there is no discussion of a solution in the issue, you should propose a solution."
+    description: "Propose a solution for a Github issue only after thorough code analysis and understanding of the bug."
     prompt: |
-      **Persona & Goal:** You are an expert software architect and problem solver. Your primary mission is to design and propose robust, maintainable solutions that address user needs while adhering to best practices and existing patterns in the codebase.
+      **Persona & Goal:** You are an expert software architect and debugger. Your primary mission is to propose solutions only after achieving a deep understanding of the bug's root cause and its impact on the system.
 
       **Mindset:** Approach each solution with:
-      * Architectural awareness - consider the broader system impact
-      * Pragmatic thinking - balance ideal solutions with practical constraints
-      * Quality focus - ensure maintainability, testability, and performance
-      * Customer-centric design - prioritize developer needs and experience
+      * Deep understanding - ensure complete comprehension of the bug
+      * Minimal impact - propose the smallest change that fixes the issue
+      * Testability - ensure the solution can be verified
+      * System awareness - consider broader implications
+
+      **Solution Development Process:**
+      1. Code Understanding
+         * Confirm understanding of the bug's root cause
+         * Verify all conditions that trigger the bug
+         * Document the current behavior vs desired behavior
+
+      2. Solution Design
+         * Propose the minimal code change needed
+         * Explain how the change addresses the root cause
+         * Document any assumptions or trade-offs
+         * Consider edge cases and error conditions
+
+      3. Testing Strategy
+         * Outline how to verify the fix works
+         * Propose specific test cases
+         * Consider regression testing needs
 
       **Desired Outcome:** Produce a comprehensive solution proposal posted as a comment on GitHub issue `$github_issue_number`. This proposal must:
-      * Clearly articulate the proposed solution
-      * Provide implementation details and considerations
-      * Include any necessary code examples or pseudocode
-      * Reference relevant patterns or best practices
+      * Begin with a clear statement of the bug's root cause
+      * Show the exact code changes needed
+      * Explain how the changes fix the issue
+      * Include test cases to verify the fix
+      * Consider potential side effects
 
     example_flow: |
       - tool: get_issue_with_comments
-      - tool: multi_search_issues
-        - Search for potential duplicates and related issues using keywords from the issue.
       - tool: search_repo_map
-        - Look for code that might be related to the research question.
-      - tool: folder_read_all or bulk_tool_caller with file_read
-        - Read the code that might be related to the research question.
-      - tool: google_search
-        - Search for other reports of similar issues outside of GitHub.
+        - Look for code that might be related to the bug
+      - tool: folder_read_all
+        - Read and analyze the relevant code sections
       - tool: create_issue_comment
+        - Post detailed solution proposal
       - tool: Report completion of the task
     allowed_tools:
       - google_search
@@ -272,7 +351,7 @@ commands:
       - tool: get_issue_with_comments
       - tool: search_repo_map
         - Look for code that might be related to the research question.
-      - tool: folder_read_all or bulk_tool_caller with file_read
+      - tool: folder_read_all
         - Read the code that might be related to the research question.
       - tool: google_search
         - Search for other reports of similar issues outside of GitHub.
@@ -304,7 +383,7 @@ commands:
     example_flow: |
       - tool: get_pull_request
       - tool: search_repo_map
-      - tool: folder_read_all or bulk_tool_caller with file_read
+      - tool: folder_read_all
         - Read the code that might be related to the research question.
       - tool: google_search
         - Search for other reports of similar issues outside of GitHub.
@@ -340,7 +419,7 @@ commands:
     example_flow: |
       - tool: get_pull_request
       - tool: search_repo_map
-      - tool: folder_read_all or bulk_tool_caller with file_read  
+      - tool: folder_read_all  
         - Read the code that might be related to the research question.
       - tool: write_code
 
@@ -384,7 +463,7 @@ commands:
       - tool: get_issue_with_comments
       - tool: search_repo_map
         - Look for code that might be related to the research question.
-      - tool: folder_read_all or bulk_tool_caller with file_read
+      - tool: folder_read_all
         - Read the code that might be related to the research question.
       - tool: new_branch
       - tool: write_code
@@ -426,7 +505,7 @@ commands:
     example_flow: |
       - tool: get_pull_request
       - tool: search_repo_map
-      - tool: folder_read_all or bulk_tool_caller with file_read
+      - tool: folder_read_all
         - Read the code that might be related to the research question.
       - tool: create_pr_review
       - tool: Report completion of the task
@@ -455,7 +534,7 @@ commands:
     example_flow: |
       - tool: get_pull_request
       - tool: search_repo_map
-      - tool: folder_read_all or bulk_tool_caller with file_read
+      - tool: folder_read_all
         - Read the code that might be related to the research question.
       - tool: write_code
       - tool: push_current_branch

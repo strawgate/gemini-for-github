@@ -99,6 +99,7 @@ class GitHubAPIClient:
             "create_pull_request": self.create_pull_request,
             "create_pull_request_comment": self.create_pull_request_comment,
             "multi_search_issues": self.multi_search_issues,
+            "get_issue_body": self.get_issue_body,
 
         }
 

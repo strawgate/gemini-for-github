@@ -396,12 +396,8 @@ class FolderOperations(MCPMixin):
             bool: True if the path matches the include patterns and does not match the exclude patterns.
         """
 
-        if include:
-            included = any(fnmatch(path, pat) for pat in include)
-        else:
-            included = True
-
-        excluded = any(fnmatch(path, pat) for pat in exclude)
+        included = any(fnmatch(path, pat) for pat in include) if include else True
+        excluded = any(fnmatch(path, pat) for pat in exclude) if exclude else False
 
         return included and not excluded
 
@@ -453,6 +449,10 @@ class FolderOperations(MCPMixin):
                             logger.debug(f"Included file: {rel_file}")
             else:
                 contents = os.listdir(folder_path)
+                for file in contents:
+                    if not self._matches_globs(file, include=["*"], exclude=self.list_folder_exclusions):
+                        logger.debug(f"Skipping file due to folder exclusions: {file}")
+                        contents.remove(file)
 
             logger.info(f"Contents of {folder_path} listed successfully {len(contents)} files")
             return contents

@@ -90,7 +90,7 @@ async def _initialize_mcp_servers(config_file: ConfigFile) -> list[MCPServer]:
     return mcp_servers
 
 
-async def _select_command(user_question: str, commands: list[Command], genai_client: GenAIClient) -> Command:
+async def _select_command(user_question: str, commands: list[Command], github_issue_number: int | None, github_pr_number: int | None, genai_client: GenAIClient, github_client: GitHubAPIClient) -> Command:
     """Selects the most appropriate command based on the user's question."""
     system_prompt = """
     You are a GitHub based AI Agent. You receive plain text questions from the developer and you need to determine which
@@ -123,7 +123,14 @@ async def _select_command(user_question: str, commands: list[Command], genai_cli
     #         raise CommandNotFoundError(msg)
     #     return command
     
+    github_issue_body: str | None = None
+    github_pr_body: str | None = None
 
+    if github_issue_number is not None:
+        github_issue_body = github_client.get_issue_body(github_issue_number)
+
+    if github_pr_number is not None:
+        github_pr_body = github_client.get_pr_body(github_pr_number)
 
     content_list = [
         genai_client.new_model_content("Ok, I understand, i'm not solving the problem, just picking the best command to use."),
@@ -134,8 +141,18 @@ async def _select_command(user_question: str, commands: list[Command], genai_cli
         genai_client.new_model_content(
             f"I also understand that I must report failure or report success. If I report success, the only valid options for task_details are {', '.join([cmd.name for cmd in commands])}."
         ),
-        genai_client.new_user_content(user_prompt),
+        genai_client.new_user_content("The user said: " + user_prompt),
     ]
+
+    if github_issue_number:
+        content_list.append(genai_client.new_model_content("Here is the body of the related github item:"))
+        content_list.append(genai_client.new_user_content(github_issue_body))
+
+    if github_pr_number:
+        content_list.append(genai_client.new_model_content("Here is the body of the related github item:"))
+        content_list.append(genai_client.new_user_content(github_pr_body))
+
+    content_list.append(genai_client.new_model_content("I will now select the best command to use."))
 
     logger.info(
         f"Calling Gemini for command selection... of {user_question}. Allowed commands: {', '.join([cmd.name for cmd in commands])}"
@@ -258,7 +275,7 @@ async def cli(
         # for name, func in bulk_tool_caller.get_tools().items():
         #     genai_client.register_tool(name, func)
 
-        command = await _select_command(user_question, config.commands, genai_client)
+        command = await _select_command(user_question, config.commands, github_issue_number, github_pr_number, genai_client, github_client)
 
         prepare_repository(git_client, github_client, github_pr_number)
 
